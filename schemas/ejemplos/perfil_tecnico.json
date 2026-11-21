@@ -1,0 +1,16 @@
+{
+  "version_esquema": "1",
+  "generador": "detectar_stack.py 0.1.0",
+  "lenguajes": ["typescript", "javascript"],
+  "frameworks": ["react", "vite"],
+  "ecosistemas": {"node": {"gestor": "npm", "manifiestos": ["package.json"], "lockfiles": ["package-lock.json"]}},
+  "baas": "supabase",
+  "orm": [],
+  "ssr_serverless": false,
+  "llm": true, "pagos": false, "emails": false, "docker": false, "iac": false, "k8s": false,
+  "movil": false, "pwa": false, "multi_idioma": false, "agente_ia": false, "ci": true,
+  "carpetas_build": ["dist"],
+  "detalle": {"llm": ["openai"], "ci": ["github_actions"]},
+  "evidencia": {"baas": ["package.json", "supabase/config.toml"], "ci": [".github/workflows/ci.yml"]},
+  "limites": {"archivos_vistos": 12, "truncado": false, "excluidos": ["node_modules"]}
+}

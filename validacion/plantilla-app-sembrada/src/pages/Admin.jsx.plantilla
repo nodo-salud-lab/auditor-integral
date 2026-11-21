@@ -1,0 +1,26 @@
+import { useEffect, useState } from 'react'
+import { supabaseAdmin } from '../lib/supabaseAdmin.js'
+import { reembolsar } from '../lib/pagos.js'
+
+export default function Admin() {
+  const [pacientes, setPacientes] = useState([])
+
+  useEffect(() => {
+    supabaseAdmin.from('pacientes').select('*').then(({ data }) => setPacientes(data ?? []))
+  }, [])
+
+  return (
+    <table>
+      <tbody>
+        {pacientes.map((p) => (
+          <tr key={p.id}>
+            <td>{p.nombre}</td>
+            <td>{p.rut}</td>
+            <td>{p.diagnostico}</td>
+            <td><button onClick={() => reembolsar(p.ultimo_cargo)}>Reembolsar</button></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}

@@ -1,0 +1,49 @@
+-- Esquema inicial de AgendaKine
+
+create table public.perfiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  nombre text not null,
+  telefono text
+);
+
+alter table public.perfiles enable row level security;
+
+create policy "cada usuario ve su perfil" on public.perfiles
+  for select using (auth.uid() = id);
+
+create policy "cada usuario edita su perfil" on public.perfiles
+  for update using (auth.uid() = id) with check (auth.uid() = id);
+
+create table public.pacientes (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null,
+  rut text not null,
+  email text,
+  diagnostico text
+);
+
+create table public.citas (
+  id uuid primary key default gen_random_uuid(),
+  paciente_id uuid not null references public.pacientes (id),
+  profesional_id uuid not null,
+  fecha timestamptz not null
+);
+
+alter table public.citas enable row level security;
+
+create policy "paciente ve sus citas" on public.citas
+  for select using (auth.uid() = paciente_id);
+
+create table public.comentarios (
+  id bigint generated always as identity primary key,
+  autor text not null,
+  cuerpo text not null,
+  creado_en timestamptz not null default now()
+);
+
+alter table public.comentarios enable row level security;
+
+create policy "todos pueden todo en comentarios" on public.comentarios
+  for all using (true) with check (true);
+
+create index comentarios_creado_en_idx on public.comentarios (creado_en);

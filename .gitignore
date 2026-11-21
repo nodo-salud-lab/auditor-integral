@@ -1,0 +1,19 @@
+# Temporales de los tests
+tests/.tmp/
+# Salidas de auditoría (en la raíz si se audita este mismo repo, o dentro de la app sembrada)
+.auditoria/
+__pycache__/
+*.pyc
+.DS_Store
+
+# App sembrada y su crudo de ejemplo MATERIALIZADOS desde plantillas (validacion/sembrado.py).
+# Contienen canarios con forma de secreto real y configuración de agente/CI peligrosa a propósito:
+# nunca se versionan. Lo versionado son validacion/plantilla-app-sembrada/ y
+# tests/fixtures/crudo/plantilla-app_sembrada/. Ver validacion/README.md.
+/validacion/app-sembrada/
+/tests/fixtures/crudo/app_sembrada/
+*.tmp-sembrado
+
+# Brazo C de la validación: auditoría completa de un proyecto clínico real (kine us), con hallazgos de seguridad,
+# revisión de privacidad y capturas. Queda solo en local; nunca se publica (decisión de Enzo, 2026-11-21).
+/validacion/brazo-c-kine-us/

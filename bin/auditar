@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+# auditar — punto de entrada determinista del auditor-integral (PLAN_MAESTRO §3.2 y §3.4).
+#
+# Uso:
+#   auditar <subcomando> [RUTA] [--modo rapido|estandar|profundo] [--salida DIR] [--sin-red]
+#                        [--fp-verificados ARCHIVO]
+#
+# --sin-red (o AUDITOR_SIN_RED=1): el usuario no autorizó la red. Ninguna fase consulta servicios externos
+#   (osv-scanner solo --offline con base local, registro npm/PyPI, registro de semgrep); esos controles quedan
+#   no_evaluado / parcial con el motivo «sin red (AUDITOR_SIN_RED)».
+#
+# --fp-verificados ARCHIVO (solo gates, report, veredictos, all): el OPERADOR autoriza el registro de falsos
+#   positivos verificados por una persona (DECISIONES.md #11; formato en la sección 6c del informe). Sin este flag
+#   no se aplica ningún descarte humano, aunque el proyecto traiga .auditor-integral/fp-verificados.json (un
+#   archivo dentro del repo auditado no prueba que lo haya escrito una persona). Páselo en cada gates/report.
+#
+# Subcomandos:
+#   doctor     herramientas instaladas → herramientas.json (sin RUTA ni --salida: JSON a stdout)
+#   stack      detecta el stack → perfil_tecnico.json (crea la carpeta de corrida)
+#   scan       escáneres deterministas            → scripts/ejecutar_scanners.sh
+#   normalize  normaliza/deduplica/enmascara      → scripts/normalizar/run.py
+#   gates      niveles N0-N5, puntaje e IUA       → scripts/gates.py + scripts/score.py + scripts/iua.py
+#   report     informe por plantilla              → scripts/render_informe.py
+#   all        doctor + stack + scan + normalize + gates + report (RUTA obligatoria; desde la carpeta del
+#              proyecto use auditar-aqui)
+#   perfil     perfil_tecnico + respuestas.json → perfil.json  → scripts/perfil.py [--respuestas ARCHIVO]
+#   digest     digests por juicio con tope de tokens → digest/   → scripts/digest.py
+#   veredictos aplica veredictos.jsonl (reglas duras) y recalcula → scripts/veredictos.py + gates + report
+#
+# Carpeta de corrida: RUTA/.auditoria/<AAAA-MM-DD_HHMM>-<commit7|sin-commits|sin-git>/ (o --salida DIR, fuera de RUTA o en RUTA/.auditoria/).
+# scan/normalize/gates/report/perfil/digest/veredictos usan --salida (debe ser una corrida existente, con run.json;
+# si no, rc 4 sin crear nada) o, si no se da, la corrida más reciente de RUTA.
+# Del proyecto auditado solo se escribe .auditoria/ y la línea '.auditoria/' en .git/info/exclude.
+#
+# Requiere Python ≥ 3.11 (python3 o AUDITOR_PYTHON); con uno más viejo termina con rc 2 y un mensaje.
+# Códigos de salida: 0 ok · 1 error de una fase · 2 uso incorrecto · 3 fase pendiente (script ausente)
+#                    · 4 no hay corrida previa (o --salida no es una corrida con run.json)
+#
+# Ejemplos (comillas siempre: las rutas pueden tener espacios):
+#   auditar doctor | python3 -I scripts/doctor_tabla.py            # qué herramientas faltan, legible
+#   auditar all "/ruta/al/proyecto" --modo rapido --sin-red         # corrida completa sin red
+#   auditar report "/ruta/al/proyecto" --salida "/ruta/al/proyecto/.auditoria/<corrida>"
+#   auditar --version
+# ---
+# (Lo que sigue no se muestra en --help.)
+# Convención para los scripts de fase (args + variables de entorno):
+#   ejecutar_scanners.sh --proyecto P --corrida D --modo M
+#   normalizar/run.py | gates.py | score.py | render_informe.py  --corrida D
+#   AUDITOR_RAIZ, AUDITOR_PROYECTO, AUDITOR_CORRIDA, AUDITOR_MODO exportadas.
+set -u
+
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${AUDITOR_PYTHON:-python3}"
+SUBCOMANDOS="doctor stack scan normalize gates report all perfil digest veredictos"
+EXIGE_CORRIDA_RUTA="scan normalize gates report perfil digest veredictos"
+
+# --help muestra la cabecera hasta la línea «# ---» (sin la convención interna de los scripts de fase).
+ayuda() { sed -n '2,/^# ---$/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; }
+error_uso() { echo "auditar: $*" >&2; echo "Use 'auditar --help'." >&2; exit 2; }
+version() { "$PY" -I -c 'import json,sys; print("auditor-integral", json.load(open(sys.argv[1]))["version"])' \
+              "$RAIZ/.claude-plugin/plugin.json" 2>/dev/null || { echo "auditar: no se pudo leer la versión de .claude-plugin/plugin.json" >&2; exit 1; }; }
+# H-14: sugerencia para las opciones más probables escritas en inglés o con el nombre de otra herramienta.
+sugerencia_opcion() {
+  case "$1" in
+    --mode|--mode=*) echo " (¿quiso decir --modo?)" ;;
+    --output|--output=*|--out|--out=*|-o) echo " (¿quiso decir --salida?)" ;;
+    --offline|--no-network|--sin_red) echo " (¿quiso decir --sin-red?)" ;;
+    --answers|--answers=*) echo " (¿quiso decir --respuestas?)" ;;
+  esac
+}
+
+[ $# -eq 0 ] && { ayuda; exit 2; }
+case "$1" in
+  -h|--help|help) ayuda; exit 0 ;;
+esac
+
+# R6 (gates-cli): el auditor necesita Python ≥ 3.11 (tomllib). Con uno más viejo (p. ej. /usr/bin/python3 3.9 de
+# macOS) cada fase moría con un traceback; ahora se corta aquí con rc 2 y un mensaje claro. --help no necesita Python.
+exigir_python() {
+  local encontrado
+  if ! command -v "$PY" >/dev/null 2>&1; then
+    echo "auditar: requiere Python ≥ 3.11; no se encontró '$PY' en el PATH." >&2
+    echo "auditar: instale Python 3.11 o superior (p. ej. 'brew install python@3.12' o python.org) o indique uno con AUDITOR_PYTHON=/ruta/a/python3." >&2
+    exit 2
+  fi
+  encontrado="$("$PY" -I -c 'import sys; print("%d.%d.%d" % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null)"
+  if [ $? -ne 0 ]; then
+    echo "auditar: requiere Python ≥ 3.11; encontrado ${encontrado:-una versión que no se pudo leer} ('$PY')." >&2
+    echo "auditar: instale Python 3.11 o superior (p. ej. 'brew install python@3.12' o python.org) o indique uno con AUDITOR_PYTHON=/ruta/a/python3." >&2
+    exit 2
+  fi
+}
+exigir_python
+
+case "$1" in
+  -V|--version|version) version; exit 0 ;;
+esac
+
+SUB="$1"; shift
+case " $SUBCOMANDOS " in
+  *" $SUB "*) ;;
+  *)
+    if [ -d "$SUB" ]; then
+      error_uso "falta el subcomando; ¿quiso decir: auditar all \"$SUB\"?"
+    fi
+    error_uso "subcomando desconocido: $SUB$(sugerencia_opcion "$SUB")"
+    ;;
+esac
+
+RUTA=""; MODO=""; SALIDA=""; RESPUESTAS=""; FP_VERIFICADOS=""
+# La autorización de descartes humanos vale solo por invocación y solo con el flag (no se hereda del entorno).
+unset AUDITOR_FP_VERIFICADOS
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --modo) [ $# -ge 2 ] || error_uso "--modo requiere valor"; MODO="$2"; shift 2 ;;
+    --modo=*) MODO="${1#--modo=}"; shift ;;
+    --salida) [ $# -ge 2 ] || error_uso "--salida requiere valor"; SALIDA="$2"; shift 2 ;;
+    --salida=*) SALIDA="${1#--salida=}"; shift ;;
+    --respuestas) [ $# -ge 2 ] || error_uso "--respuestas requiere valor"; RESPUESTAS="$2"; shift 2 ;;
+    --respuestas=*) RESPUESTAS="${1#--respuestas=}"; shift ;;
+    --fp-verificados) [ $# -ge 2 ] || error_uso "--fp-verificados requiere un archivo"; FP_VERIFICADOS="$2"; shift 2 ;;
+    --fp-verificados=*) FP_VERIFICADOS="${1#--fp-verificados=}"; shift ;;
+    --sin-red) export AUDITOR_SIN_RED=1; shift ;;
+    -h|--help) ayuda; exit 0 ;;
+    -*) error_uso "opción desconocida: $1$(sugerencia_opcion "$1")" ;;
+    *) [ -z "$RUTA" ] || error_uso "sobra el argumento: $1"; RUTA="$1"; shift ;;
+  esac
+done
+
+if [ -n "$MODO" ]; then
+  case "$MODO" in rapido|estandar|profundo) ;; *) error_uso "modo inválido: $MODO (rapido|estandar|profundo)" ;; esac
+fi
+# R6 (gates-cli): 'all' sin RUTA auditaba el directorio actual sin avisar, con red por defecto y sin las protecciones
+# de auditar-aqui (/, $HOME, carpetas sin proyecto). Ahora exige la ruta explícita.
+if [ "$SUB" = all ] && [ -z "$RUTA" ]; then
+  echo "auditar: 'all' requiere la RUTA del proyecto (no audita el directorio actual por omisión)." >&2
+  echo "auditar: use: auditar all \"/ruta/al/proyecto\" --sin-red   o, desde la carpeta del proyecto: auditar-aqui --sin-red (o --con-red)" >&2
+  exit 2
+fi
+if [ -n "$RUTA" ] && [ ! -d "$RUTA" ]; then error_uso "no es una carpeta: $RUTA"; fi
+if [ -n "$RESPUESTAS" ]; then
+  [ "$SUB" = perfil ] || error_uso "--respuestas solo vale con 'perfil'"
+  [ -f "$RESPUESTAS" ] || error_uso "no existe el archivo de respuestas: $RESPUESTAS"
+  RESPUESTAS="$(cd "$(dirname "$RESPUESTAS")" && pwd)/$(basename "$RESPUESTAS")"
+fi
+if [ -n "$FP_VERIFICADOS" ]; then
+  case " gates report veredictos all " in *" $SUB "*) ;; *) error_uso "--fp-verificados solo vale con gates, report, veredictos o all" ;; esac
+  [ -f "$FP_VERIFICADOS" ] && [ ! -L "$FP_VERIFICADOS" ] || error_uso "--fp-verificados no es un archivo regular: $FP_VERIFICADOS"
+  FP_VERIFICADOS="$(cd "$(dirname "$FP_VERIFICADOS")" && pwd)/$(basename "$FP_VERIFICADOS")"
+  export AUDITOR_FP_VERIFICADOS="$FP_VERIFICADOS"
+fi
+if [ -n "$SALIDA" ] && [ "$SUB" != doctor ]; then
+  # O1 (investigacion/18): una corrida dentro del proyecto pero fuera de .auditoria/ la recorrerían los escáneres de
+  # la corrida siguiente (osv-scanner leía su sbom.cdx.json, check_sbom la tomaba por «SBOM en el repo» y tapaba un
+  # fail real). Se rechaza ANTES de crear nada; rutas resueltas (realpath: .., enlaces) para no evadirlo.
+  "$PY" -I -c '
+import os, sys
+proy = os.path.realpath(sys.argv[1]); sal = os.path.realpath(sys.argv[2])
+dentro = lambda a, b: a == b or a.startswith(b.rstrip(os.sep) + os.sep)
+sys.exit(1 if dentro(sal, proy) and not dentro(sal, os.path.join(proy, ".auditoria")) else 0)
+' "${RUTA:-.}" "$SALIDA" || error_uso "--salida no puede quedar dentro del proyecto fuera de .auditoria/ (la leerían los escáneres de la corrida siguiente): use una carpeta fuera del proyecto o dentro de su .auditoria/"
+fi
+# U-2/H-4 (investigacion/18): RUTA es siempre el proyecto. Si es una carpeta de corrida (tiene run.json), se
+# explica cómo pasarla; nunca se crea .auditoria/ dentro de una corrida. Mismos códigos de antes: rc 4 para los
+# subcomandos que usan una corrida previa (antes: «no hay corrida previa»), rc 2 para los que abren una corrida.
+# Si --salida tampoco es una corrida, decide el bloque U-1 de abajo (rc 4 con la pista «¿invirtió RUTA y --salida?»).
+if [ -n "$RUTA" ] && [ -f "$RUTA/run.json" ] && [ "$SUB" != doctor ] \
+   && { [ -z "$SALIDA" ] || [ -f "$SALIDA/run.json" ] || ! case " $EXIGE_CORRIDA_RUTA " in *" $SUB "*) true ;; *) false ;; esac; }; then
+  PROY_DE_CORRIDA="$("$PY" -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("proyecto") or "")' "$RUTA/run.json" 2>/dev/null || true)"
+  echo "auditar: esa carpeta es una corrida (tiene run.json), no un proyecto: $RUTA" >&2
+  case " $EXIGE_CORRIDA_RUTA " in
+    *" $SUB "*)
+      echo "auditar: use: auditar $SUB \"${PROY_DE_CORRIDA:-<proyecto>}\" --salida \"${SALIDA:-$RUTA}\"" >&2
+      exit 4 ;;
+    *)
+      echo "auditar: use: auditar $SUB \"${PROY_DE_CORRIDA:-<proyecto>}\"" >&2
+      exit 2 ;;
+  esac
+fi
+# U-1/H-3 (investigacion/18): los subcomandos que trabajan sobre una corrida previa NO crean una corrida vacía cuando
+# --salida no existe o no es una corrida (un error de tipeo daba rc 0 y un digest «completo» sobre datos vacíos):
+# fallan con rc 4 antes de crear nada. stack, all y doctor sí crean la carpeta (son los que abren una corrida).
+EXIGE_CORRIDA="scan normalize gates report perfil digest veredictos"
+if [ -n "$SALIDA" ]; then
+  case " $EXIGE_CORRIDA " in
+    *" $SUB "*)
+      if [ -e "$SALIDA" ] && [ ! -d "$SALIDA" ]; then
+        echo "auditar: --salida no es una carpeta (es un archivo): $SALIDA" >&2
+        echo "auditar: '$SUB' necesita una carpeta de corrida previa (con run.json); no se crea nada. Revise la ruta o cree la corrida con 'auditar stack RUTA --salida DIR' (o 'auditar all')." >&2
+        exit 4
+      fi
+      if [ ! -d "$SALIDA" ]; then
+        echo "auditar: --salida no existe: $SALIDA" >&2
+        echo "auditar: '$SUB' necesita una corrida previa; no se crea una vacía. Revise la ruta o cree la corrida con 'auditar stack RUTA --salida DIR' (o 'auditar all')." >&2
+        exit 4
+      fi
+      if [ ! -f "$SALIDA/run.json" ]; then
+        echo "auditar: --salida no es una carpeta de corrida (falta run.json): $SALIDA" >&2
+        pista=""
+        if [ -n "$RUTA" ] && [ -f "$RUTA/run.json" ]; then
+          pista=" (RUTA sí parece una corrida: ¿invirtió RUTA y --salida? RUTA es la carpeta del proyecto)"
+        fi
+        echo "auditar: '$SUB' necesita una corrida previa; no se crea una vacía${pista}. Cree la corrida con 'auditar stack RUTA --salida DIR' (o 'auditar all')." >&2
+        exit 4
+      fi
+      ;;
+    *) mkdir -p "$SALIDA" || { echo "auditar: no se pudo crear $SALIDA" >&2; exit 2; } ;;
+  esac
+  SALIDA="$(cd "$SALIDA" && pwd)"
+fi
+
+CORRIDA=""
+PROYECTO=""
+
+# --- utilidades ---------------------------------------------------------------
+crear_corrida() {
+  local modo="${MODO:-estandar}" args
+  PROYECTO="$(cd "${RUTA:-.}" && pwd)"
+  args=(crear --proyecto "$PROYECTO" --modo "$modo" --subcomando "$SUB")
+  [ -n "$SALIDA" ] && args+=(--salida "$SALIDA")
+  CORRIDA="$("$PY" "$RAIZ/scripts/corrida.py" "${args[@]}")" || { echo "auditar: no se pudo crear la carpeta de corrida" >&2; exit 1; }
+  MODO="$modo"
+}
+
+usar_corrida_existente() {
+  PROYECTO="$(cd "${RUTA:-.}" && pwd)"
+  if [ -n "$SALIDA" ]; then
+    # U-1: ya validado arriba (rc 4 si falta run.json); nunca se crea aquí una corrida vacía
+    if [ -f "$SALIDA/run.json" ]; then CORRIDA="$SALIDA"; else echo "auditar: --salida no es una corrida: $SALIDA" >&2; exit 4; fi
+  else
+    CORRIDA="$("$PY" "$RAIZ/scripts/corrida.py" ultima --proyecto "$PROYECTO")" || {
+      echo "auditar: no hay corrida previa en $PROYECTO/.auditoria; ejecute primero 'auditar stack $PROYECTO' (o use --salida)" >&2
+      exit 4
+    }
+  fi
+  if [ -z "$MODO" ]; then
+    MODO="$("$PY" -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["modo"])' "$CORRIDA/run.json" 2>/dev/null || echo estandar)"
+  fi
+}
+
+registrar() { # fase estado codigo duracion [detalle]
+  local args=(fase --corrida "$CORRIDA" --fase "$1" --estado "$2" --codigo "$3" --duracion "$4")
+  [ $# -ge 5 ] && args+=(--detalle "$5")
+  "$PY" "$RAIZ/scripts/corrida.py" "${args[@]}" >&2 || true
+}
+
+# ejecutar_fase FASE SCRIPT_RELATIVO -- comando...
+# Si el script no existe, la fase queda 'pendiente' y devuelve 3. La salida estándar del
+# comando se envía a stderr para que stdout de 'auditar' sea solo la ruta de la corrida.
+ejecutar_fase() {
+  local fase="$1" script="$2"; shift 3
+  if [ ! -f "$RAIZ/$script" ]; then
+    echo "auditar: fase '$fase' pendiente: falta $script (lo construye otro componente)" >&2
+    registrar "$fase" pendiente 3 0 "falta $script"
+    return 3
+  fi
+  export AUDITOR_RAIZ="$RAIZ" AUDITOR_PROYECTO="$PROYECTO" AUDITOR_CORRIDA="$CORRIDA" AUDITOR_MODO="$MODO"
+  local inicio=$SECONDS codigo
+  "$@" >&2
+  codigo=$?
+  local dur=$(( SECONDS - inicio ))
+  if [ "$codigo" -eq 0 ]; then
+    registrar "$fase" ok 0 "$dur"
+  else
+    echo "auditar: la fase '$fase' terminó con código $codigo" >&2
+    registrar "$fase" error "$codigo" "$dur" "código de salida $codigo"
+    return 1
+  fi
+}
+
+fase_doctor() {
+  ejecutar_fase doctor scripts/doctor.sh -- bash "$RAIZ/scripts/doctor.sh" --salida "$CORRIDA/herramientas.json"
+}
+fase_stack() {
+  ejecutar_fase stack scripts/detectar_stack.py -- "$PY" "$RAIZ/scripts/detectar_stack.py" "$PROYECTO" --salida "$CORRIDA/perfil_tecnico.json"
+}
+fase_scan() {
+  ejecutar_fase scan scripts/ejecutar_scanners.sh -- bash "$RAIZ/scripts/ejecutar_scanners.sh" --proyecto "$PROYECTO" --corrida "$CORRIDA" --modo "$MODO"
+}
+fase_normalize() {
+  ejecutar_fase normalize scripts/normalizar/run.py -- "$PY" "$RAIZ/scripts/normalizar/run.py" --corrida "$CORRIDA"
+}
+fase_gates() {
+  ejecutar_fase gates scripts/gates.py -- "$PY" "$RAIZ/scripts/gates.py" --corrida "$CORRIDA" || return $?
+  ejecutar_fase score scripts/score.py -- "$PY" "$RAIZ/scripts/score.py" --corrida "$CORRIDA" || return $?
+  ejecutar_fase iua scripts/iua.py -- "$PY" "$RAIZ/scripts/iua.py" --corrida "$CORRIDA"
+}
+fase_perfil() {
+  local extra=()
+  [ -n "$RESPUESTAS" ] && extra=(--respuestas "$RESPUESTAS")
+  ejecutar_fase perfil scripts/perfil.py -- "$PY" "$RAIZ/scripts/perfil.py" --corrida "$CORRIDA" ${extra[@]+"${extra[@]}"}
+}
+fase_digest() {
+  ejecutar_fase digest scripts/digest.py -- "$PY" "$RAIZ/scripts/digest.py" --corrida "$CORRIDA"
+}
+fase_veredictos() {
+  # valida y aplica veredictos.jsonl (estado.json + gates.json); luego puntaje, IUA e informe con «Decisiones de la IA»
+  ejecutar_fase veredictos scripts/veredictos.py -- "$PY" "$RAIZ/scripts/veredictos.py" --corrida "$CORRIDA" || return $?
+  fase_gates || return $?
+  fase_report
+}
+fase_report() {
+  ejecutar_fase report scripts/render_informe.py -- "$PY" "$RAIZ/scripts/render_informe.py" --corrida "$CORRIDA"
+}
+
+# --- despacho -----------------------------------------------------------------
+case "$SUB" in
+  doctor)
+    if [ -z "$RUTA" ] && [ -z "$SALIDA" ]; then
+      exec bash "$RAIZ/scripts/doctor.sh"
+    elif [ -z "$RUTA" ]; then
+      bash "$RAIZ/scripts/doctor.sh" --salida "$SALIDA/herramientas.json" || exit 1
+      echo "$SALIDA"; exit 0
+    fi
+    crear_corrida
+    fase_doctor; codigo=$?
+    echo "$CORRIDA"; exit "$codigo"
+    ;;
+  stack)
+    crear_corrida
+    fase_stack; codigo=$?
+    echo "$CORRIDA"; exit "$codigo"
+    ;;
+  scan|normalize|gates|report|perfil|digest|veredictos)
+    usar_corrida_existente
+    "fase_$SUB"; codigo=$?
+    echo "$CORRIDA"; exit "$codigo"
+    ;;
+  all)
+    crear_corrida
+    codigo=0
+    for f in doctor stack scan normalize gates report; do
+      "fase_$f"; codigo=$?
+      if [ "$codigo" -ne 0 ]; then
+        echo "auditar: 'all' se detuvo en la fase '$f'" >&2
+        break
+      fi
+    done
+    echo "$CORRIDA"; exit "$codigo"
+    ;;
+esac

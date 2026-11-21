@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auditor-integral.local/schemas/estado.schema.json",
+  "title": "Estado por control",
+  "description": "estado.json de una corrida: un registro por control aplicable (PLAN_MAESTRO §3.5). fail = >= 1 hallazgo no descartado; pass = evidencia positiva según evidencia_pass del control (ausencia de hallazgos con alcance ≥ 1, o pase explícito en checks_pass; nunca en no_demostrable_estatico); no_evaluado = falta herramienta, falló, timeout o sin respuesta en la entrevista.",
+  "type": "object",
+  "required": [
+    "version_esquema",
+    "controles"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version_esquema": {
+      "const": "1"
+    },
+    "corrida": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 80
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "modo": {
+      "enum": [
+        "rapido",
+        "estandar",
+        "profundo",
+        null
+      ]
+    },
+    "generado": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 40
+    },
+    "controles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/estado_control"
+      }
+    }
+  },
+  "$defs": {
+    "estado_control": {
+      "type": "object",
+      "required": [
+        "control",
+        "estado",
+        "metodo"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "control": {
+          "type": "string",
+          "pattern": "^(SEG|DAT|COD|UX|INF|ESC|OPS)-[A-Z0-9+-]+$"
+        },
+        "estado": {
+          "enum": [
+            "pass",
+            "fail",
+            "no_evaluado",
+            "no_aplica",
+            "manual_pendiente"
+          ]
+        },
+        "motivo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        },
+        "metodo": {
+          "enum": [
+            "determinista",
+            "mixto",
+            "llm",
+            "manual"
+          ]
+        },
+        "duracion_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "herramienta": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "hallazgos": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^H-[0-9a-f]{6,64}$"
+          }
+        },
+        "descarte_humano": {
+          "description": "H-2 (DECISIONES.md #11): el control quedó no_aplica porque una persona registró sus hallazgos como falsos positivos verificados en <proyecto>/.auditor-integral/fp-verificados.json. No es pass.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "quien",
+            "fecha",
+            "conclusion",
+            "hallazgos"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "quien": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "fecha": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "conclusion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "hallazgos": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^H-[0-9a-f]{6,64}$"
+              }
+            },
+            "entradas": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

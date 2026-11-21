@@ -1,0 +1,1416 @@
+# Verdad de terreno del brazo A (app sembrada) — auditor-integral
+# Generado el 2026-11-18. Fuente de la app: validacion/app-sembrada/ (AgendaKine, Vite+React+Supabase+Express).
+#
+# CONVENCIONES
+# - control: ID canónico de catalogo/controles.toml (fuente única, §4.3). gate y severidad se copian del
+#   catálogo (gate y severidad_base) al generar este archivo; si el catálogo cambia, regenerar.
+#   El SQL concatenado va a DAT-SQL-CONCATENADO (N1) y el HTML de salida LLM a SEG-LLM-SALIDA, según el catálogo.
+# - archivo: ruta relativa a app-sembrada/. linea: 1-based; se omite en defectos de ausencia o de archivo completo.
+# - patron: regex que DEBE coincidir con la línea indicada (tests/test_verdad_terreno.py lo verifica;
+#   si alguien edita la app, el test falla hasta regenerar las líneas).
+# - ausencia = true: el defecto es que algo falta; coincide por control sin exigir archivo.
+#   falta_archivo = true: además el archivo indicado no existe en la app (lo verifica el test).
+# - paquete: para dependencias; el hallazgo debe mencionar el nombre del paquete.
+# - detectable_en_F1: true si (a) una herramienta de F1 (gitleaks, semgrep p/owasp-top-ten, osv-scanner, zizmor
+#   persona por defecto) lo detectó en la verificación de siembra, o (b) lo cubre un check/regla propia que el
+#   plan especifica explícitamente para F1 (env_publicas, registro_deps, archivos_clave, config_agentes; reglas
+#   semgrep: auth en cliente, service_role, amount de req.body). En otro caso false con su razón.
+# - deteccion_verificada: qué herramienta cruda lo marcó al sembrar (2026-11-18). LIMITACIÓN: quien sembró corrió las
+#   herramientas crudas (no el auditor) para comprobar que la siembra es detectable; esto rompe parcialmente el
+#   cegamiento de §11.5 y se declara.
+# - reservado: criterio fijo y documentado: número del id (D07 → 7, L13 → 13) con n % 10 ∈ {3, 6, 9}
+#   (≈ 30 %). Los reservados no se miran durante el desarrollo; solo para la medición final (§11.5 paso 5).
+# - Todos los secretos de la app son CANARIOS FALSOS generados al azar; ninguno es válido.
+
+[[defecto]]
+id = "D01"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 8
+patron = "^VITE_OPENAI_API_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre el working tree (.env comiteado)"
+deteccion_verificada = "gitleaks 8.30.1: openai-api-key"
+reservado = false
+
+[[defecto]]
+id = "D02"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 11
+patron = "^VITE_SUPABASE_SERVICE_ROLE_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre el working tree (.env comiteado)"
+deteccion_verificada = "gitleaks 8.30.1: jwt"
+reservado = false
+
+[[defecto]]
+id = "D03"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 14
+patron = "^VITE_STRIPE_SECRET_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre el working tree (.env comiteado)"
+deteccion_verificada = "gitleaks 8.30.1: stripe-access-token"
+reservado = true
+
+[[defecto]]
+id = "D04"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 19
+patron = "^STRIPE_SECRET_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre el working tree (.env comiteado)"
+deteccion_verificada = "gitleaks 8.30.1: stripe-access-token"
+reservado = false
+
+[[defecto]]
+id = "D05"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 20
+patron = "^SUPABASE_SERVICE_ROLE_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre el working tree (.env comiteado)"
+deteccion_verificada = "gitleaks 8.30.1: jwt"
+reservado = false
+
+[[defecto]]
+id = "D06"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 21
+patron = "^SENDGRID_API_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre el working tree (.env comiteado)"
+deteccion_verificada = "gitleaks 8.30.1: sendgrid-api-token"
+reservado = true
+
+[[defecto]]
+id = "D07"
+control = "SEG-SECRETO-REPO"
+archivo = "server/config.js"
+linea = 12
+patron = "sk_live_Nj9Z"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks: clave Stripe live como fallback en código"
+deteccion_verificada = "gitleaks 8.30.1: stripe-access-token"
+reservado = false
+
+[[defecto]]
+id = "D08"
+control = "SEG-SECRETO-REPO"
+archivo = "server/config.js"
+linea = 15
+patron = "ghp_"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks: token GitHub clásico"
+deteccion_verificada = "gitleaks 8.30.1: github-pat"
+reservado = false
+
+[[defecto]]
+id = "D09"
+control = "SEG-SECRETO-REPO"
+archivo = "server/almacenamiento.js"
+linea = 7
+patron = "accessKeyId: 'AKIA"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks: clave de acceso AWS"
+deteccion_verificada = "gitleaks 8.30.1: aws-access-token"
+reservado = true
+
+[[defecto]]
+id = "D10"
+control = "SEG-SECRETO-REPO"
+archivo = "server/almacenamiento.js"
+linea = 8
+patron = "secretAccessKey:"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks: regla genérica por palabra clave"
+deteccion_verificada = "gitleaks 8.30.1: generic-api-key"
+reservado = false
+
+[[defecto]]
+id = "D11"
+control = "SEG-SECRETO-REPO"
+archivo = "src/lib/pagos.js"
+linea = 7
+patron = "const STRIPE_SK = "
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks: clave Stripe live en código del cliente"
+deteccion_verificada = "gitleaks 8.30.1: stripe-access-token"
+reservado = false
+
+[[defecto]]
+id = "D12"
+control = "SEG-SECRETO-REPO"
+archivo = ".mcp.json"
+linea = 7
+patron = "\\\"SUPABASE_SERVICE_ROLE_KEY\\\": \\\"eyJ"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks: JWT service_role en configuración MCP"
+deteccion_verificada = "gitleaks 8.30.1: jwt"
+reservado = false
+
+[[defecto]]
+id = "D13"
+control = "SEG-SECRETO-BUNDLE"
+archivo = "dist/assets/index-7c1e9a4b.js"
+linea = 8
+patron = "const Hm=bf\\("
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre dist/: JWT service_role en el bundle"
+deteccion_verificada = "gitleaks 8.30.1: jwt"
+reservado = true
+
+[[defecto]]
+id = "D14"
+control = "SEG-SECRETO-BUNDLE"
+archivo = "dist/assets/index-7c1e9a4b.js"
+linea = 12
+patron = "const Ab=\\\"sk_live_"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre dist/: clave Stripe live en el bundle"
+deteccion_verificada = "gitleaks 8.30.1: stripe-access-token"
+reservado = false
+
+[[defecto]]
+id = "D15"
+control = "SEG-SECRETO-BUNDLE"
+archivo = "dist/assets/index-7c1e9a4b.js"
+linea = 17
+patron = "apiKey:\\\"sk-"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "gitleaks sobre dist/: clave OpenAI en el bundle"
+deteccion_verificada = "gitleaks 8.30.1: openai-api-key"
+reservado = false
+
+[[defecto]]
+id = "D16"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 11
+patron = "^VITE_SUPABASE_SERVICE_ROLE_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "env_publicas.py (F1): prefijo VITE_ con nombre sensible"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = true
+
+[[defecto]]
+id = "D17"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 8
+patron = "^VITE_OPENAI_API_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "env_publicas.py (F1): prefijo VITE_ con nombre sensible"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = false
+
+[[defecto]]
+id = "D18"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 14
+patron = "^VITE_STRIPE_SECRET_KEY="
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "env_publicas.py (F1): prefijo VITE_ con nombre sensible"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = false
+
+[[defecto]]
+id = "D19"
+control = "SEG-ENV-EJEMPLO"
+archivo = ".env.example"
+ausencia = true
+falta_archivo = true
+gate = "N1"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "archivos_clave.py (F1): falta .env.example"
+deteccion_verificada = "verificado por inspección: el archivo no existe"
+reservado = true
+
+[[defecto]]
+id = "D20"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 22
+patron = "\\\"express\\-secure\\-session\\-kit\\\":"
+paquete = "express-secure-session-kit"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "registro_deps.py (F1): el nombre no existe en el registro npm"
+deteccion_verificada = "curl https://registry.npmjs.org/express-secure-session-kit → HTTP 404 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D21"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 32
+patron = "\\\"react\\-stripe\\-checkout\\-hooks\\-v2\\\":"
+paquete = "react-stripe-checkout-hooks-v2"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "registro_deps.py (F1): el nombre no existe en el registro npm"
+deteccion_verificada = "curl https://registry.npmjs.org/react-stripe-checkout-hooks-v2 → HTTP 404 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D22"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 35
+patron = "\\\"supabase\\-rls\\-helper\\-pro\\\":"
+paquete = "supabase-rls-helper-pro"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "registro_deps.py (F1): el nombre no existe en el registro npm"
+deteccion_verificada = "curl https://registry.npmjs.org/supabase-rls-helper-pro → HTTP 404 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D23"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 41
+patron = "\\\"vite\\-plugin\\-env\\-guardian\\\":"
+paquete = "vite-plugin-env-guardian"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "registro_deps.py (F1): el nombre no existe en el registro npm"
+deteccion_verificada = "curl https://registry.npmjs.org/vite-plugin-env-guardian → HTTP 404 (2026-11-18)"
+reservado = true
+
+[[defecto]]
+id = "D24"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 80
+patron = "\\\"node_modules/ejs\\\":"
+paquete = "ejs"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 9.8 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D25"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 92
+patron = "\\\"node_modules/handlebars\\\":"
+paquete = "handlebars"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 9.8 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D26"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 104
+patron = "\\\"node_modules/lodash\\\":"
+paquete = "lodash"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 9.1 (2026-11-18)"
+reservado = true
+
+[[defecto]]
+id = "D27"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 110
+patron = "\\\"node_modules/minimist\\\":"
+paquete = "minimist"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 9.8 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D28"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 146
+patron = "\\\"node_modules/shell\\-quote\\\":"
+paquete = "shell-quote"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 9.8 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D29"
+control = "SEG-DEPS-CVE-ALTO"
+archivo = "package-lock.json"
+linea = 50
+patron = "\\\"node_modules/axios\\\":"
+paquete = "axios"
+gate = "N4"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 8.6 (2026-11-18)"
+reservado = true
+
+[[defecto]]
+id = "D30"
+control = "SEG-DEPS-CVE-ALTO"
+archivo = "package-lock.json"
+linea = 98
+patron = "\\\"node_modules/jsonwebtoken\\\":"
+paquete = "jsonwebtoken"
+gate = "N4"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "osv-scanner sobre package-lock.json"
+deteccion_verificada = "osv-scanner 2.7.0: CVSS máx 8.1 (2026-11-18)"
+reservado = false
+
+[[defecto]]
+id = "D31"
+control = "DAT-SQL-CONCATENADO"
+archivo = "server/rutas/usuarios.js"
+linea = 9
+patron = "WHERE email = '\\\" \\+ req\\.query\\.email"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "p/owasp-top-ten no lo detectó en la verificación y no hay regla propia especificada en el plan; candidata a regla propia"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = false
+
+[[defecto]]
+id = "D32"
+control = "DAT-SQL-CONCATENADO"
+archivo = "server/rutas/reportes.js"
+linea = 9
+patron = "= \\$\\{req\\.params\\.anio\\}"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "p/owasp-top-ten no lo detectó en la verificación y no hay regla propia especificada en el plan; candidata a regla propia"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = false
+
+[[defecto]]
+id = "D33"
+control = "SEG-SAST-INY"
+archivo = "server/rutas/reportes.js"
+linea = 15
+patron = "eval\\(req\\.body\\.formula\\)"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "semgrep p/owasp-top-ten"
+deteccion_verificada = "semgrep 1.181.0 p/owasp-top-ten: code-string-concat"
+reservado = true
+
+[[defecto]]
+id = "D34"
+control = "SEG-SAST-INY"
+archivo = "server/rutas/reportes.js"
+linea = 21
+patron = "exec\\('pdftotext"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "p/owasp-top-ten no lo detectó en la verificación y no hay regla propia especificada en el plan; candidata a regla propia"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = false
+
+[[defecto]]
+id = "D35"
+control = "SEG-SAST-INY"
+archivo = "src/components/Comentario.jsx"
+linea = 10
+patron = "dangerouslySetInnerHTML"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "semgrep p/owasp-top-ten"
+deteccion_verificada = "semgrep 1.181.0 p/owasp-top-ten: react-dangerouslysetinnerhtml"
+reservado = false
+
+[[defecto]]
+id = "D36"
+control = "SEG-LLM-SALIDA"
+archivo = "src/components/RespuestaIA.jsx"
+linea = 11
+patron = "dangerouslySetInnerHTML"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "p/owasp-top-ten no lo detectó en la verificación y no hay regla propia especificada en el plan; candidata a regla propia (HTML de salida de LLM)"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = true
+
+[[defecto]]
+id = "D37"
+control = "SEG-AUTH-CLIENTE"
+archivo = "src/components/RutaPrivada.jsx"
+linea = 5
+patron = "localStorage\\.getItem\\('esAdmin'\\)"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "regla semgrep propia prevista en el plan (§3.2: auth en cliente)"
+deteccion_verificada = "no aplica (regla propia aún no escrita)"
+reservado = false
+
+[[defecto]]
+id = "D38"
+control = "SEG-AUTH-CLIENTE"
+archivo = "src/pages/Login.jsx"
+linea = 19
+patron = "localStorage\\.setItem\\('esAdmin'"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "regla semgrep propia prevista en el plan (§3.2: auth en cliente)"
+deteccion_verificada = "no aplica (regla propia aún no escrita)"
+reservado = false
+
+[[defecto]]
+id = "D39"
+control = "SEG-AUTH-CLIENTE"
+archivo = "src/lib/supabaseAdmin.js"
+linea = 7
+patron = "VITE_SUPABASE_SERVICE_ROLE_KEY"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "regla semgrep propia prevista en el plan (§3.2: service_role); alias: service_role en el cliente"
+deteccion_verificada = "no aplica (regla propia aún no escrita)"
+reservado = true
+
+[[defecto]]
+id = "D40"
+control = "SEG-PAGOS-SERVIDOR"
+archivo = "server/rutas/pagos.js"
+linea = 14
+patron = "amount: req\\.body\\.monto"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = true
+razon_detectable = "regla semgrep propia prevista en el plan (§3.2: amount de req.body)"
+deteccion_verificada = "no aplica (regla propia aún no escrita)"
+reservado = false
+
+[[defecto]]
+id = "D41"
+control = "SEG-PAGOS-FIRMA"
+archivo = "server/rutas/pagos.js"
+linea = 24
+patron = "const evento = req\\.body"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "webhook sin verificación de firma: no hay regla en F1"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D42"
+control = "SEG-AGENTES-IA"
+archivo = ".mcp.json"
+linea = 7
+patron = "\\\"SUPABASE_SERVICE_ROLE_KEY\\\": \\\"eyJ"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "config_agentes.py (F1): service_role en servidor MCP"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = false
+
+[[defecto]]
+id = "D43"
+control = "SEG-AGENTES-IA"
+archivo = ".claude/settings.json"
+linea = 3
+patron = "bypassPermissions"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "config_agentes.py (F1): defaultMode bypassPermissions"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = true
+
+[[defecto]]
+id = "D44"
+control = "SEG-AGENTES-IA"
+archivo = ".claude/settings.json"
+linea = 7
+patron = "\\\"Bash\\(\\*\\)\\\""
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "config_agentes.py (F1): Bash(*) permitido"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = false
+
+[[defecto]]
+id = "D45"
+control = "SEG-AGENTES-IA"
+archivo = ".claude/settings.json"
+linea = 8
+patron = "mcp__supabase__execute_sql"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "config_agentes.py (F1): SQL arbitrario vía MCP con service_role"
+deteccion_verificada = "no aplica (check propio de F1 aún no construido)"
+reservado = false
+
+[[defecto]]
+id = "D46"
+control = "SEG-LLM-CLAVE"
+archivo = "src/lib/ia.js"
+linea = 4
+patron = "apiKey: import\\.meta\\.env\\.VITE_OPENAI_API_KEY"
+gate = "N1"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "llamada al LLM desde el navegador: sin regla propia especificada (la variable sí la cubre SEG-ENV-PUBLICAS)"
+deteccion_verificada = "ninguna"
+reservado = true
+
+[[defecto]]
+id = "D47"
+control = "SEG-ERRORES"
+archivo = "server/rutas/pagos.js"
+linea = 19
+patron = "\\} catch \\(e\\) \\{\\}"
+gate = "N3"
+severidad = "media"
+detectable_en_F1 = false
+razon_detectable = "catch vacío en el pago: sin regla verificada en F1"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = false
+
+[[defecto]]
+id = "D48"
+control = "SEG-ERRORES"
+archivo = "server/index.js"
+linea = 29
+patron = "stack: err\\.stack"
+gate = "N3"
+severidad = "media"
+detectable_en_F1 = false
+razon_detectable = "stack trace en la respuesta: sin regla verificada en F1"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = false
+
+[[defecto]]
+id = "D49"
+control = "SEG-CORS"
+archivo = "server/index.js"
+linea = 15
+patron = "origin: '\\*', credentials: true"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "CORS * con credenciales: sin regla verificada en F1"
+deteccion_verificada = "ninguna (semgrep p/owasp-top-ten: sin hallazgo)"
+reservado = true
+
+[[defecto]]
+id = "D50"
+control = "SEG-CICD"
+archivo = ".github/workflows/preview.yml"
+linea = 4
+patron = "^  pull_request_target:"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "zizmor dangerous-triggers"
+deteccion_verificada = "zizmor 1.32.0 (persona regular, --offline): dangerous-triggers"
+reservado = false
+
+[[defecto]]
+id = "D51"
+control = "SEG-CICD"
+archivo = ".github/workflows/preview.yml"
+linea = 7
+patron = "^permissions: write-all"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "zizmor solo lo informa con --persona auditor; el adaptador F1 usa la persona por defecto"
+deteccion_verificada = "zizmor 1.32.0 (persona regular, --offline): sin hallazgo (sí con --persona auditor: excessive-permissions)"
+reservado = false
+
+[[defecto]]
+id = "D52"
+control = "SEG-CICD"
+archivo = ".github/workflows/preview.yml"
+linea = 13
+patron = "uses: actions/checkout@v4"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "zizmor unpinned-uses"
+deteccion_verificada = "zizmor 1.32.0 (persona regular, --offline): unpinned-uses; semgrep 1.181.0 p/owasp-top-ten: github-actions-mutable-action-tag"
+reservado = false
+
+[[defecto]]
+id = "D53"
+control = "SEG-CICD"
+archivo = ".github/workflows/preview.yml"
+linea = 15
+patron = "ref: \\$\\{\\{ github\\.event\\.pull_request\\.head\\.sha"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "checkout del head en pull_request_target: semgrep pull-request-target-code-checkout y zizmor artipacked (informan la línea 13, dentro de ±3)"
+deteccion_verificada = "semgrep 1.181.0 p/owasp-top-ten: pull-request-target-code-checkout; zizmor 1.32.0 (persona regular, --offline): artipacked"
+reservado = true
+
+[[defecto]]
+id = "D54"
+control = "SEG-CICD"
+archivo = ".github/workflows/preview.yml"
+linea = 16
+patron = "uses: actions/setup-node@v4"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "zizmor unpinned-uses"
+deteccion_verificada = "zizmor 1.32.0 (persona regular, --offline): unpinned-uses"
+reservado = false
+
+[[defecto]]
+id = "D55"
+control = "SEG-CICD"
+archivo = ".github/workflows/preview.yml"
+linea = 20
+patron = "amondnet/vercel-action@master"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "zizmor unpinned-uses (acción de terceros en rama)"
+deteccion_verificada = "zizmor 1.32.0 (persona regular, --offline): unpinned-uses"
+reservado = false
+
+[[defecto]]
+id = "D56"
+control = "SEG-CICD"
+archivo = ".github/workflows/triage.yml"
+linea = 15
+patron = "github\\.event\\.issue\\.title"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "zizmor template-injection"
+deteccion_verificada = "zizmor 1.32.0 (persona regular, --offline): template-injection; semgrep 1.181.0 p/owasp-top-ten: run-shell-injection"
+reservado = true
+
+[[defecto]]
+id = "D57"
+control = "SEG-IDOR"
+archivo = "server/rutas/citas.js"
+linea = 9
+patron = "FROM citas WHERE id = \\$1"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "IDOR: requiere juicio del agente revisor-autorizacion (F3)"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D58"
+control = "SEG-BFLA"
+archivo = "server/rutas/admin.js"
+linea = 7
+patron = "router\\.get\\('/pacientes'"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "ruta admin sin control en servidor: revisor-autorizacion (F3)"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D59"
+control = "SEG-BFLA"
+archivo = "server/rutas/admin.js"
+linea = 13
+patron = "router\\.post\\('/rol'"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "cambio de rol sin control en servidor: revisor-autorizacion (F3)"
+deteccion_verificada = "ninguna"
+reservado = true
+
+[[defecto]]
+id = "D60"
+control = "SEG-RATELIMIT"
+archivo = "server/rutas/auth.js"
+linea = 9
+patron = "router\\.post\\('/login'"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "sin límite de intentos: rutas_inventario.py + juicio (F3)"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D61"
+control = "ESC-LLM-TOPE"
+archivo = "src/lib/ia.js"
+linea = 9
+patron = "chat\\.completions\\.create"
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "LLM sin max_tokens: sin regla en F1"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D62"
+control = "DAT-RLS-ON"
+archivo = "supabase/migrations/20250114120000_inicial.sql"
+linea = 17
+patron = "create table public\\.pacientes"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "tabla sin RLS: splinter/esquema_resumen.py (F2)"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D63"
+control = "DAT-RLS-PERMISIVA"
+archivo = "supabase/migrations/20250114120000_inicial.sql"
+linea = 47
+patron = "for all using \\(true\\)"
+gate = "N2"
+severidad = "critica"
+detectable_en_F1 = false
+razon_detectable = "política USING(true): splinter/esquema_resumen.py (F2)"
+deteccion_verificada = "ninguna"
+reservado = true
+
+[[defecto]]
+id = "D64"
+control = "DAT-MIGRACIONES-SEGURAS"
+archivo = "supabase/migrations/20250302090000_indice_citas.sql"
+linea = 2
+patron = "^create index citas_paciente_id_idx"
+gate = "N3"
+severidad = "alta"
+detectable_en_F1 = false
+razon_detectable = "CREATE INDEX sin CONCURRENTLY en tabla existente: squawk (F2)"
+deteccion_verificada = "ninguna"
+reservado = false
+
+[[defecto]]
+id = "D65"
+control = "COD-REPRO"
+archivo = "README.md"
+gate = "N1"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "archivos_clave.py (F1): README sin instrucciones de instalación ni arranque"
+deteccion_verificada = "verificado por inspección"
+reservado = false
+
+[[defecto]]
+id = "D66"
+control = "COD-TESTS-HUMO"
+archivo = "tests/"
+ausencia = true
+falta_archivo = true
+gate = "N2"
+severidad = "alta"
+detectable_en_F1 = true
+razon_detectable = "archivos_clave.py (F1): no hay tests ni script test en package.json"
+deteccion_verificada = "verificado por inspección"
+reservado = true
+
+[[defecto]]
+id = "D67"
+control = "OPS-HEALTH"
+archivo = "server/index.js"
+ausencia = true
+gate = "N2"
+severidad = "media"
+detectable_en_F1 = true
+razon_detectable = "archivos_clave.py (F1): no existe ruta /health"
+deteccion_verificada = "verificado por inspección"
+reservado = false
+
+[[limpio]]
+id = "L01"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 4
+patron = "^VITE_SUPABASE_ANON_KEY="
+razon = "clave publicable de Supabase: pública por diseño (gitleaks crudo la marca como generic-api-key: prueba el filtro)"
+reservado = false
+
+[[limpio]]
+id = "L02"
+control = "SEG-SECRETO-REPO"
+archivo = ".env"
+linea = 5
+patron = "^VITE_STRIPE_PUBLISHABLE_KEY="
+razon = "pk_live es publicable (gitleaks crudo la marca como generic-api-key: prueba el filtro)"
+reservado = false
+
+[[limpio]]
+id = "L03"
+control = "SEG-SECRETO-REPO"
+archivo = "server/config.js"
+linea = 7
+patron = "databaseUrl: process\\.env\\.DATABASE_URL"
+razon = "lee del entorno, sin literal"
+reservado = true
+
+[[limpio]]
+id = "L04"
+control = "SEG-SECRETO-REPO"
+archivo = "server/config.js"
+linea = 9
+patron = "supabaseServiceKey: process\\.env"
+razon = "nombre sensible pero sin literal"
+reservado = false
+
+[[limpio]]
+id = "L05"
+control = "SEG-SECRETO-REPO"
+archivo = "server/config.js"
+linea = 17
+patron = "stripeWebhookSecret: process\\.env"
+razon = "nombre sensible pero sin literal"
+reservado = false
+
+[[limpio]]
+id = "L06"
+control = "SEG-SECRETO-REPO"
+archivo = ".mcp.json"
+linea = 14
+patron = "\\\"CONTEXT7_API_KEY\\\": \\\"\\$\\{CONTEXT7_API_KEY\\}\\\""
+razon = "referencia a variable, no literal"
+reservado = true
+
+[[limpio]]
+id = "L07"
+control = "SEG-SECRETO-REPO"
+archivo = "package-lock.json"
+linea = 41
+patron = "\\\"integrity\\\": \\\"sha512-"
+razon = "hash de integridad, no secreto (primera ocurrencia)"
+reservado = false
+
+[[limpio]]
+id = "L08"
+control = "SEG-SECRETO-REPO"
+archivo = "src/lib/supabaseClient.js"
+linea = 5
+patron = "const supabaseAnonKey = import\\.meta\\.env"
+razon = "clave anon leída del entorno"
+reservado = false
+
+[[limpio]]
+id = "L09"
+control = "SEG-SECRETO-BUNDLE"
+archivo = "dist/assets/index-7c1e9a4b.js"
+linea = 3
+patron = "Fu=\\\"sb_publishable_"
+razon = "clave publicable en el bundle: correcto"
+reservado = true
+
+[[limpio]]
+id = "L10"
+control = "SEG-SECRETO-BUNDLE"
+archivo = "dist/assets/index-7c1e9a4b.js"
+linea = 5
+patron = "const Ip=\\\"pk_live_"
+razon = "clave publicable de Stripe en el bundle: correcto"
+reservado = false
+
+[[limpio]]
+id = "L11"
+control = "SEG-SECRETO-BUNDLE"
+archivo = "dist/index.html"
+linea = 7
+patron = "<script type=\\\"module\\\""
+razon = "HTML del bundle sin secretos"
+reservado = false
+
+[[limpio]]
+id = "L12"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 2
+patron = "^VITE_APP_NOMBRE="
+razon = "nombre no sensible"
+reservado = false
+
+[[limpio]]
+id = "L13"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 3
+patron = "^VITE_SUPABASE_URL="
+razon = "URL pública"
+reservado = true
+
+[[limpio]]
+id = "L14"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 4
+patron = "^VITE_SUPABASE_ANON_KEY="
+razon = "ANON es pública por diseño (no debe tratarse como KEY sensible)"
+reservado = false
+
+[[limpio]]
+id = "L15"
+control = "SEG-ENV-PUBLICAS"
+archivo = ".env"
+linea = 5
+patron = "^VITE_STRIPE_PUBLISHABLE_KEY="
+razon = "PUBLISHABLE es pública por diseño"
+reservado = false
+
+[[limpio]]
+id = "L16"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 14
+patron = "\\\"@supabase/supabase\\-js\\\":"
+paquete = "@supabase/supabase-js"
+razon = "paquete real publicado en npm"
+reservado = true
+
+[[limpio]]
+id = "L17"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 18
+patron = "\\\"dompurify\\\":"
+paquete = "dompurify"
+razon = "paquete real publicado en npm"
+reservado = false
+
+[[limpio]]
+id = "L18"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 21
+patron = "\\\"express\\\":"
+paquete = "express"
+razon = "paquete real publicado en npm"
+reservado = false
+
+[[limpio]]
+id = "L19"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 29
+patron = "\\\"react\\\":"
+paquete = "react"
+razon = "paquete real publicado en npm"
+reservado = true
+
+[[limpio]]
+id = "L20"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 36
+patron = "\\\"zod\\\":"
+paquete = "zod"
+razon = "paquete real publicado en npm"
+reservado = false
+
+[[limpio]]
+id = "L21"
+control = "SEG-DEPS-EXISTEN"
+archivo = "package.json"
+linea = 39
+patron = "\\\"@vitejs/plugin\\-react\\\":"
+paquete = "@vitejs/plugin-react"
+razon = "paquete real publicado en npm"
+reservado = false
+
+[[limpio]]
+id = "L22"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 86
+patron = "\\\"node_modules/express\\\":"
+paquete = "express"
+razon = "osv-scanner 2.7.0 sin vulnerabilidades (2026-11-18)"
+reservado = false
+
+[[limpio]]
+id = "L23"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 128
+patron = "\\\"node_modules/react\\\":"
+paquete = "react"
+razon = "osv-scanner 2.7.0 sin vulnerabilidades (2026-11-18)"
+reservado = true
+
+[[limpio]]
+id = "L24"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 68
+patron = "\\\"node_modules/dompurify\\\":"
+paquete = "dompurify"
+razon = "osv-scanner 2.7.0 sin vulnerabilidades (2026-11-18)"
+reservado = false
+
+[[limpio]]
+id = "L25"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 122
+patron = "\\\"node_modules/pg\\\":"
+paquete = "pg"
+razon = "osv-scanner 2.7.0 sin vulnerabilidades (2026-11-18)"
+reservado = false
+
+[[limpio]]
+id = "L26"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 152
+patron = "\\\"node_modules/stripe\\\":"
+paquete = "stripe"
+razon = "osv-scanner 2.7.0 sin vulnerabilidades (2026-11-18)"
+reservado = true
+
+[[limpio]]
+id = "L27"
+control = "SEG-DEPS-CVE-CRIT"
+archivo = "package-lock.json"
+linea = 171
+patron = "\\\"node_modules/vite\\\":"
+paquete = "vite"
+razon = "osv-scanner 2.7.0 sin vulnerabilidades (2026-11-18)"
+reservado = false
+
+[[limpio]]
+id = "L28"
+control = "DAT-SQL-CONCATENADO"
+archivo = "server/rutas/usuarios.js"
+linea = 15
+patron = "WHERE id = \\$1', \\[req\\.usuario\\.id\\]"
+razon = "consulta parametrizada"
+reservado = false
+
+[[limpio]]
+id = "L29"
+control = "DAT-SQL-CONCATENADO"
+archivo = "server/rutas/reportes.js"
+linea = 30
+patron = "extract\\(month from fecha\\) = \\$2"
+razon = "consulta parametrizada"
+reservado = true
+
+[[limpio]]
+id = "L30"
+control = "DAT-SQL-CONCATENADO"
+archivo = "server/rutas/profesionales.js"
+linea = 18
+patron = "especialidad = \\$1\\) LIMIT 50"
+razon = "consulta parametrizada"
+reservado = false
+
+[[limpio]]
+id = "L31"
+control = "DAT-SQL-CONCATENADO"
+archivo = "server/rutas/pagos.js"
+linea = 35
+patron = "WHERE s\\.id = \\$1 AND s\\.paciente_id = \\$2"
+razon = "consulta parametrizada"
+reservado = false
+
+[[limpio]]
+id = "L32"
+control = "SEG-SAST-INY"
+archivo = "src/components/NotaClinica.jsx"
+linea = 6
+patron = "dangerouslySetInnerHTML=\\{\\{ __html: limpio \\}\\}"
+razon = "HTML sanitizado con DOMPurify (prueba FP de la regla react)"
+reservado = false
+
+[[limpio]]
+id = "L33"
+control = "SEG-SAST-INY"
+archivo = "src/components/TarjetaProfesional.jsx"
+linea = 8
+patron = "\\{profesional\\.biografia\\}"
+razon = "texto escapado por React"
+reservado = true
+
+[[limpio]]
+id = "L34"
+control = "SEG-SAST-INY"
+archivo = "src/utils/formato.js"
+linea = 9
+patron = "return JSON\\.parse\\(texto\\)"
+razon = "JSON.parse en vez de eval"
+reservado = false
+
+[[limpio]]
+id = "L35"
+control = "SEG-AUTH-CLIENTE"
+archivo = "server/middleware/auth.js"
+linea = 10
+patron = "supabase\\.auth\\.getUser\\(token\\)"
+razon = "verificación del JWT en el servidor"
+reservado = false
+
+[[limpio]]
+id = "L36"
+control = "SEG-AUTH-CLIENTE"
+archivo = "src/pages/Perfil.jsx"
+linea = 10
+patron = "supabase\\.auth\\.getUser\\(\\)"
+razon = "sesión real de Supabase; RLS protege los datos"
+reservado = true
+
+[[limpio]]
+id = "L37"
+control = "SEG-AUTH-CLIENTE"
+archivo = "src/lib/supabaseClient.js"
+linea = 7
+patron = "export const supabase = createClient"
+razon = "cliente con clave anon"
+reservado = false
+
+[[limpio]]
+id = "L38"
+control = "SEG-AUTH-CLIENTE"
+archivo = "server/rutas/auth.js"
+linea = 6
+patron = "const supabase = createClient\\(config\\.supabaseUrl, config\\.supabaseServiceKey\\)"
+razon = "service_role usado en el servidor: correcto"
+reservado = false
+
+[[limpio]]
+id = "L39"
+control = "SEG-PAGOS-SERVIDOR"
+archivo = "server/rutas/pagos.js"
+linea = 40
+patron = "amount: rows\\[0\\]\\.precio_sesion"
+razon = "monto tomado de la BD"
+reservado = true
+
+[[limpio]]
+id = "L40"
+control = "SEG-ERRORES"
+archivo = "server/rutas/pagos.js"
+linea = 46
+patron = "console\\.error\\('Error creando el cobro'"
+razon = "error registrado y respuesta genérica"
+reservado = false
+
+[[limpio]]
+id = "L41"
+control = "SEG-ERRORES"
+archivo = "server/rutas/profesionales.js"
+linea = 23
+patron = "console\\.error\\('Error listando profesionales'"
+razon = "error registrado y respuesta genérica"
+reservado = false
+
+[[limpio]]
+id = "L42"
+control = "SEG-ERRORES"
+archivo = "src/utils/formato.js"
+linea = 11
+patron = "console\\.warn\\('Preferencias inválidas"
+razon = "catch con manejo explícito"
+reservado = false
+
+[[limpio]]
+id = "L43"
+control = "SEG-CORS"
+archivo = "server/rutas/profesionales.js"
+linea = 8
+patron = "cors\\(\\{ origin: 'https://agendakine\\.cl' \\}\\)"
+razon = "origen explícito sin credenciales"
+reservado = true
+
+[[limpio]]
+id = "L44"
+control = "SEG-CICD"
+archivo = ".github/workflows/lint.yml"
+linea = 4
+patron = "^  pull_request:"
+razon = "disparador seguro"
+reservado = false
+
+[[limpio]]
+id = "L45"
+control = "SEG-CICD"
+archivo = ".github/workflows/lint.yml"
+linea = 8
+patron = "^  contents: read"
+razon = "permisos mínimos"
+reservado = false
+
+[[limpio]]
+id = "L46"
+control = "SEG-CICD"
+archivo = ".github/workflows/lint.yml"
+linea = 14
+patron = "actions/checkout@08eba0b"
+razon = "acción fijada a SHA con persist-credentials: false"
+reservado = true
+
+[[limpio]]
+id = "L47"
+control = "SEG-CICD"
+archivo = ".github/workflows/lint.yml"
+linea = 21
+patron = "run: npm ci --ignore-scripts"
+razon = "run sin expresiones de contexto"
+reservado = false
+
+[[limpio]]
+id = "L48"
+control = "SEG-AGENTES-IA"
+archivo = ".mcp.json"
+linea = 12
+patron = "@upstash/context7-mcp@1\\.0\\.14"
+razon = "servidor MCP con versión fija y clave por variable"
+reservado = false
+
+[[limpio]]
+id = "L49"
+control = "SEG-AGENTES-IA"
+archivo = ".claude/settings.json"
+linea = 5
+patron = "\\\"Read\\(\\./src/\\*\\*\\)\\\""
+razon = "permiso de lectura acotado"
+reservado = true
+
+[[limpio]]
+id = "L50"
+control = "SEG-AGENTES-IA"
+archivo = ".claude/settings.json"
+linea = 11
+patron = "\\\"Read\\(\\./\\.env\\)\\\""
+razon = "deny de lectura de .env"
+reservado = false
+
+[[limpio]]
+id = "L51"
+control = "SEG-IDOR"
+archivo = "server/rutas/citas.js"
+linea = 16
+patron = "WHERE paciente_id = \\$1 ORDER BY"
+razon = "filtra por el usuario autenticado"
+reservado = false
+
+[[limpio]]
+id = "L52"
+control = "DAT-RLS-ON"
+archivo = "supabase/migrations/20250114120000_inicial.sql"
+linea = 9
+patron = "alter table public\\.perfiles enable row level security"
+razon = "RLS activado"
+reservado = false
+
+[[limpio]]
+id = "L53"
+control = "DAT-RLS-PERMISIVA"
+archivo = "supabase/migrations/20250114120000_inicial.sql"
+linea = 12
+patron = "for select using \\(auth\\.uid\\(\\) = id\\)"
+razon = "política por dueño"
+reservado = true
+
+[[limpio]]
+id = "L54"
+control = "DAT-RLS-PERMISIVA"
+archivo = "supabase/migrations/20250114120000_inicial.sql"
+linea = 35
+patron = "for select using \\(auth\\.uid\\(\\) = paciente_id\\)"
+razon = "política por dueño"
+reservado = false
+
+[[limpio]]
+id = "L55"
+control = "DAT-MIGRACIONES-SEGURAS"
+archivo = "supabase/migrations/20250114120000_inicial.sql"
+linea = 49
+patron = "create index comentarios_creado_en_idx"
+razon = "índice sobre tabla recién creada en la misma migración"
+reservado = false
+
+[[limpio]]
+id = "L56"
+control = "SEG-LOCKFILE"
+archivo = "package-lock.json"
+razon = "lockfile presente"
+reservado = true

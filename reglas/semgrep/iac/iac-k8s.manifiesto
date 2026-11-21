@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+spec:
+  # ruleid: k8s_host
+  hostNetwork: true
+  # ok: k8s_host
+  hostname: web
+  containers:
+    - name: a
+      image: nginx:1.25
+      securityContext:
+        # ruleid: k8s_privilegiado
+        privileged: true
+        # ok: k8s_privilegiado
+        readOnlyRootFilesystem: true

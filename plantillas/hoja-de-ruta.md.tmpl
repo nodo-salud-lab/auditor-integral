@@ -1,0 +1,24 @@
+# Hoja de ruta — $proyecto
+
+Nivel actual demostrado: **$nivel_demostrado** ($hito). Siguiente hito: $hito_siguiente.
+
+El orden lo decide el script (bloqueos → dependencias técnicas → severidad → dominio cuello de botella → esfuerzo). El esfuerzo S/M/L es **ESTIMACIÓN** del catálogo. Solo se listan los controles del siguiente nivel de cada dominio y los críticos; el resto queda para más adelante.
+
+## Qué hacer ahora
+
+Lista completa en orden: críticos, luego lo que falla para el siguiente nivel, luego lo que falta evaluar (cada ítem con esfuerzo S/M/L y archivo o comando).
+
+$que_hacer_ahora
+
+# Detalle por grupo
+
+$grupos
+
+# Descartados por verificación humana
+
+Controles que salen del plan porque una persona verificó que el hallazgo era un falso positivo (no es `pass`):
+
+$descartes_humanos
+
+---
+Cómo verificar el avance: corrida nueva sobre el mismo proyecto. CLI: `bin/auditar all "<carpeta del proyecto>" --modo $modo` · Claude Code: `/auditor-integral:auditar --modo $modo`. Para ver qué cambió respecto de la corrida anterior: `python3 -I scripts/comparar_corridas.py --proyecto "<carpeta del proyecto>"`. El auditor no certifica seguridad; esta hoja de ruta es una **GUÍA**.

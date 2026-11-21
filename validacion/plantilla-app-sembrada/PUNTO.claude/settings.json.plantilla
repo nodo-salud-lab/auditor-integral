@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Read(./src/**)",
+      "Bash(npm run build)",
+      "Bash(*)",
+      "mcp__supabase__execute_sql"
+    ],
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}

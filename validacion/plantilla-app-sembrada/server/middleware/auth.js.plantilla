@@ -1,0 +1,14 @@
+import { createClient } from '@supabase/supabase-js'
+import { config } from '../config.js'
+
+const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey)
+
+// Verifica el JWT de Supabase en el servidor y adjunta el usuario a la petición.
+export async function requiereAuth(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) return res.status(401).json({ error: 'No autenticado' })
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data.user) return res.status(401).json({ error: 'Sesión inválida' })
+  req.usuario = data.user
+  next()
+}

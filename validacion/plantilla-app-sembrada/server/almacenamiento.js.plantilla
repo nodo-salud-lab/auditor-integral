@@ -1,0 +1,15 @@
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+
+// Bucket donde se guardan los informes PDF de los pacientes
+const s3 = new S3Client({
+  region: 'sa-east-1',
+  credentials: {
+    accessKeyId: '@@CANARIO:C11@@',
+    secretAccessKey: '@@CANARIO:C08@@',
+  },
+})
+
+export async function subirInforme(nombre, contenido) {
+  await s3.send(new PutObjectCommand({ Bucket: 'agendakine-informes', Key: nombre, Body: contenido }))
+  return `https://agendakine-informes.s3.sa-east-1.amazonaws.com/${nombre}`
+}

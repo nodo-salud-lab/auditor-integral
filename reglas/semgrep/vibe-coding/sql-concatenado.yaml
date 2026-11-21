@@ -1,0 +1,30 @@
+rules:
+  - id: sql-concatenado
+    message: >-
+      Consulta SQL armada concatenando o interpolando valores ($Q). Es inyección SQL si alguno
+      viene del usuario. Usar parámetros enlazados (placeholders numerados o "?") o un query builder.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: DAT-SQL-CONCATENADO
+      cwe: "CWE-89: SQL Injection"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          - pattern: $DB.$Q($ARG, ...)
+          - patterns:
+              - pattern: $DB.$Q($CONSULTA, ...)
+              - pattern-inside: |
+                  $CONSULTA = $ARG;
+                  ...
+      - metavariable-regex:
+          metavariable: $Q
+          regex: ^(query|execute|raw|unsafe|\$queryRawUnsafe|\$executeRawUnsafe|all|get|run|exec)$
+      # El primer fragmento literal parece SQL.
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?is)^\s*[`'"]\s*(select|insert\s+into|update|delete\s+from|with|replace\s+into)\b
+      # Y contiene un valor no literal (metavariable-regex se ancla al inicio, de ahí el .*): '+' junto a algo que no es una comilla, o una interpolación ${...}.
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?s).*(\+\s*[^\s'"`]|[^\s'"`]\s*\+|\$\{)

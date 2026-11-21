@@ -1,0 +1,106 @@
+# herramientas.lock — versiones y hashes de las herramientas externas detectadas por doctor.sh.
+# Formato TOML. Generado el 2026-11-18T03:01:33Z en Darwin arm64.
+# sha256 = hash del binario (o del script lanzador) resuelto por command -v, siguiendo enlaces simbólicos.
+# Una herramienta no disponible queda con disponible = false: sus controles salen no_evaluado.
+# Regenerar: bash scripts/doctor.sh y volcar versiones/hashes aquí (doctor.sh no instala nada).
+
+generado = "2026-11-18T03:01:33Z"
+plataforma = "Darwin arm64"
+
+[herramientas."gitleaks"]
+disponible = true
+version = "8.30.1"
+sha256 = "f414bc2fb952be6c9072b75cb411e3368614ef4b16d48dbd9ad238034afd2302"
+via = "path"
+
+[herramientas."semgrep"]
+disponible = true
+version = "1.181.0"
+sha256 = "656c520681cff75e0cecbaa9440caac214c96dc01969e45ddcb2a4dc093b8d75"
+via = "path"
+
+[herramientas."osv-scanner"]
+disponible = true
+version = "2.7.0"
+sha256 = "a224dc7f20b2c08569dd52c4b866afad74ed54842d630bf0ef60f88754d69b00"
+via = "path"
+
+[herramientas."zizmor"]
+disponible = true
+version = "1.32.0"
+sha256 = "05cc668305902975988e444f39b5e2511aa18b456e0e70e125eb425c4cc137d7"
+via = "path"
+
+[herramientas."trivy"]
+disponible = false
+instalacion_sugerida = "brew install trivy"
+
+[herramientas."jscpd"]
+disponible = false
+instalacion_sugerida = "npm install -g jscpd"
+
+[herramientas."knip"]
+disponible = false
+instalacion_sugerida = "npm install -g knip"
+
+[herramientas."squawk"]
+disponible = false
+instalacion_sugerida = "npm install -g squawk-cli"
+
+[herramientas."k6"]
+disponible = false
+instalacion_sugerida = "brew install k6"
+
+[herramientas."hadolint"]
+disponible = false
+instalacion_sugerida = "brew install hadolint"
+
+[herramientas."actionlint"]
+disponible = false
+instalacion_sugerida = "brew install actionlint"
+
+[herramientas."checkov"]
+disponible = false
+instalacion_sugerida = "pipx install checkov"
+
+[herramientas."lizard"]
+disponible = false
+instalacion_sugerida = "pipx install lizard"
+
+[herramientas."node"]
+disponible = true
+version = "22.23.3"
+sha256 = "68f4d07ca49e0500cc135c7e0a445093e228e42e126ac22306d045f0a8c2636b"
+via = "path"
+
+[herramientas."npx"]
+disponible = true
+version = "10.9.9"
+sha256 = "237adf8f3747cad8b9b62fcfd0d9c8d509a64e550337707f55100afcb79e8900"
+via = "path"
+
+[herramientas."python3"]
+disponible = true
+version = "3.14.6"
+sha256 = "07919b0fbf82742c24420d7dcadbd459f61bc1feb638eca02b81dccab2daf4d5"
+via = "path"
+
+[herramientas."jq"]
+disponible = true
+version = "1.7.1"
+sha256 = "b16bc93b2f3c69ce3134f20b796bb72aa3410b10166566ac2ca1bee5e4153ed5"
+via = "path"
+
+[herramientas."git"]
+disponible = true
+version = "2.54.0"
+sha256 = "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+via = "path"
+
+[herramientas."playwright"]
+disponible = false
+instalacion_sugerida = "npm install -g playwright (luego: npx playwright install chromium)"
+
+[herramientas."lhci"]
+disponible = false
+instalacion_sugerida = "npm install -g @lhci/cli"

@@ -1,0 +1,24 @@
+# Configuración de gitleaks del auditor-integral.
+# Se pasa SIEMPRE con --config: así un .gitleaks.toml del proyecto auditado no puede
+# desactivar reglas (sería una vía de evasión). Extiende la configuración por defecto.
+title = "auditor-integral (base)"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Carpetas que no son código del proyecto"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.auditoria/''',
+  '''(^|/)\.next/cache/''',
+]
+
+[[allowlists]]
+description = "Claves publicables por diseño (no son secretos)"
+regexTarget = "match"
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_-]+''',
+  '''pk_(live|test)_[A-Za-z0-9]+''',
+]

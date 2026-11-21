@@ -1,0 +1,24 @@
+# Aplicabilidad por tipo de proyecto (ronda 6, grupo gates-cli).
+#
+# perfil_tecnico.json → tipo_proyecto (lo escribe detectar_stack.py): web | api | spa | movil | cli_libreria |
+# desconocido. scripts/gates.py (ajustar_tipo_proyecto) lee esta tabla y deja en no_aplica, con el motivo de la
+# regla, los controles listados para ese tipo.
+#
+# Fail-closed:
+#   - Sin tipo_proyecto, con "desconocido" o con un valor que no está en esta tabla, no se cambia nada.
+#   - Solo se cambian controles en no_evaluado o manual_pendiente SIN hallazgos. Un fail (hay evidencia de que el
+#     proyecto sí tiene esa superficie: p. ej. semgrep encontró CORS con comodín en una «CLI») o un pass no se tocan,
+#     ni un no_evaluado por posible falso positivo de la IA (DECISIONES.md #10).
+#   - Solo controles cuya superficie es EXCLUSIVA de un servidor HTTP o de un navegador. Ante la duda no se lista:
+#     no_aplica cuenta como OK para el nivel, así que una entrada de más abriría un pase falso.
+
+[[regla]]
+tipo = "cli_libreria"
+motivo = "tipo de proyecto cli_libreria (perfil_tecnico.tipo_proyecto): el control trata de un servidor HTTP o de una página que carga un navegador, que este proyecto no expone"
+controles = ["OPS-HEALTH", "SEG-HEADERS", "SEG-CORS", "SEG-RATELIMIT",
+             "UX-LANG", "UX-NAVEGADORES", "UX-LCP-LAB", "UX-LIGHTHOUSE", "UX-CWV-CAMPO"]
+
+[[regla]]
+tipo = "movil"
+motivo = "tipo de proyecto movil (perfil_tecnico.tipo_proyecto): el control trata de una página que carga un navegador (cabeceras HTTP, CORS, atributo lang de html, browserslist, Lighthouse/Web Vitals), que no existe en una app nativa"
+controles = ["SEG-HEADERS", "SEG-CORS", "UX-LANG", "UX-NAVEGADORES", "UX-LCP-LAB", "UX-LIGHTHOUSE", "UX-CWV-CAMPO"]

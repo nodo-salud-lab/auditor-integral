@@ -1,0 +1,26 @@
+rules:
+  - id: cors-comodin-credenciales
+    message: >-
+      CORS acepta cualquier origen ('*' o reflejado) y además credenciales (cookies). Cualquier sitio
+      puede hacer peticiones autenticadas en nombre del usuario. Usar una lista explícita de orígenes.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-CORS
+      cwe: "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          - pattern: |
+              cors({..., credentials: true, ...})
+          - pattern: |
+              $APP.enableCors({..., credentials: true, ...})
+      - pattern-either:
+          - pattern: |
+              $F({..., origin: "*", ...})
+          - pattern: |
+              $F({..., origin: true, ...})
+          - pattern: |
+              $F({..., origin: (...) => true, ...})
+          - pattern: |
+              $F({..., origin: ($O, $CB) => $CB(null, true), ...})

@@ -1,0 +1,88 @@
+# Carpetas y archivos CONFIDENCIALES del proyecto auditado (DECISIONES.md #3, generalizada).
+#
+# Su CONTENIDO nunca se analiza ni produce evidencia: ningún adaptador lo escanea (semgrep --exclude,
+# allowlist de rutas en la configuración de gitleaks generada por corrida, filtro de rutas en osv) y el
+# normalizador descarta cualquier hallazgo cuya ruta caiga aquí. scripts/checks/datos_confidenciales.py
+# informa SOLO metadatos: si la carpeta existe, n.º de archivos, tamaño, si está en .gitignore y si algún
+# archivo está versionado en git (→ DAT-PII-REPO, crítico).
+#
+# Reglas de coincidencia (sin distinguir mayúsculas de minúsculas; scripts/checks/datos_confidenciales.py):
+#   carpetas  nombre de carpeta o secuencia de carpetas ("data/raw") en cualquier profundidad del proyecto.
+#             "data/raw" coincide con data/raw/x y app/data/raw/x, no con data/raw.js ni data/rawdata/.
+#   carpetas_ambiguas  igual, pero solo los archivos de DATOS que contienen son confidenciales (ver abajo).
+#   archivos  patrón glob sobre el NOMBRE del archivo, en cualquier carpeta.
+#
+# Se puede usar otro archivo con la variable de entorno AUDITOR_CONFIDENCIAL=/ruta/al/archivo.toml.
+# Agregar aquí un patrón solo amplía la exclusión: quitar uno expone ese contenido al análisis.
+#
+# Ronda 6 (verificación ciega node-next): hay dos clases de carpeta.
+#   carpetas            INEQUÍVOCAS: carpetas de datos. TODO su contenido es confidencial (código incluido).
+#   carpetas_ambiguas   nombres que también se usan para CÓDIGO de la aplicación (p. ej. pages/api/patients/,
+#                       src/pacientes/). Dentro de ellas, los archivos de código y configuración (extensiones de
+#                       [ambiguas].extensiones_codigo o nombres de [ambiguas].nombres_codigo) se analizan como
+#                       cualquier otro y no generan DAT-PII-REPO. Todo lo demás (csv, tsv, xlsx, json, sqlite, dcm,
+#                       yaml, txt, md, pdf, imágenes… o una extensión desconocida) sigue siendo confidencial
+#                       (fail-closed). Un archivo SIN extensión dentro de una carpeta ambigua no se distingue de una
+#                       subcarpeta por su nombre: se trata como el resto del proyecto (no confidencial).
+# Retrocompatibilidad: un TOML antiguo sin `carpetas_ambiguas` sigue funcionando; si pone "pacientes" en
+# `carpetas`, esa carpeta es inequívoca (todo confidencial, como antes). Si un nombre está en ambas listas,
+# gana la inequívoca. Sin la tabla [ambiguas] se usan las listas por defecto de
+# scripts/checks/datos_confidenciales.py (EXT_CODIGO_AMBIGUA, NOMBRES_CODIGO_AMBIGUA).
+
+carpetas = [
+  "datos-reales",
+  "datos_reales",
+  "datos-abiertos",
+  "datos_abiertos",
+  "data/raw",
+]
+
+carpetas_ambiguas = [
+  "pacientes",
+  "patients",
+]
+
+archivos = [
+  # DICOM (imagen médica): pueden llevar nombre, RUT y fecha de nacimiento en la cabecera.
+  "*.dcm",
+  "*.DCM",
+  "*.dicom",
+  "DICOMDIR",
+  # NIfTI (neuroimagen) y EDF/BDF (señales biomédicas: EEG, EMG, ECG): suelen traer datos del sujeto.
+  "*.nii",
+  "*.nii.gz",
+  "*.edf",
+  "*.bdf",
+]
+
+# AUD-SINT: rutas de datos SINTÉTICOS declaradas por el CREADOR del proyecto auditado (relativas a su raíz;
+# una carpeta o un archivo; se anclan a la raíz, no se buscan en cualquier profundidad). Un archivo
+# confidencial versionado dentro de estas rutas no genera el crítico DAT-PII-REPO: sale como info con la
+# nota «declarado sintético por el creador, verificar». Si es DICOM, el inspector de cabecera
+# (scripts/checks/datos_confidenciales.py) lee SOLO PatientName, PatientID y PatientBirthDate y, si no
+# parecen vacíos o ficticios (FICTICIO, ANON, TEST, SINTETICO, 11.111.111-1…), el crítico se mantiene.
+# Los valores leídos nunca se escriben en ningún artefacto. La lista la decide el creador; el auditor no
+# la completa por su cuenta. Ejemplo (kine us herramienta): rutas = ["pruebas/sinteticos"]
+[sinteticos]
+rutas = []
+
+# Carpetas ambiguas: qué cuenta como CÓDIGO o CONFIGURACIÓN (se analiza normalmente). Extensiones en minúsculas,
+# con punto; nombres como glob sobre el nombre del archivo (sin distinguir mayúsculas). .json, .yaml/.yml, .html,
+# .md y .txt NO están: dentro de una carpeta ambigua pueden ser registros o documentos de pacientes; los
+# manifiestos y lockfiles conocidos van por nombre.
+[ambiguas]
+extensiones_codigo = [
+  ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".vue", ".svelte", ".astro",
+  ".py", ".go", ".java", ".kt", ".kts", ".rb", ".php", ".cs", ".rs", ".scala", ".swift", ".c", ".cc", ".cpp",
+  ".h", ".hpp", ".ex", ".exs", ".sol", ".lua", ".dart", ".sh", ".bash", ".zsh", ".ps1",
+  ".tf", ".hcl", ".css", ".scss", ".sass", ".less", ".graphql", ".gql", ".prisma", ".proto",
+  ".ejs", ".hbs", ".pug", ".njk", ".toml", ".ini", ".cfg", ".conf", ".lock",
+]
+nombres_codigo = [
+  "package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+  "bun.lock", "bun.lockb", "composer.json", "deno.json", "deno.jsonc", "tsconfig*.json", "jsconfig*.json",
+  "project.json", "nx.json", "turbo.json", "angular.json", "vercel.json", ".eslintrc*", ".prettierrc*",
+  ".babelrc*", ".npmrc", ".nvmrc", ".editorconfig", ".gitignore", ".gitkeep", ".gitattributes", ".dockerignore",
+  ".env", ".env.*", "requirements*.txt", "Pipfile", "go.mod", "go.sum", "Gemfile", "Dockerfile*", "Makefile",
+  "Procfile",
+]

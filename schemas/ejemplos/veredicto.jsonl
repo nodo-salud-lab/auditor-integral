@@ -1,0 +1,3 @@
+{"agente": "triage-fp", "control": "SEG-SECRETO-BUNDLE", "hallazgo_id": "H-7f3a9c", "veredicto": "verdadero", "razon": "La clave aparece en el bundle servido al navegador.", "ubicaciones": ["dist/assets/index-abc.js:1"], "modelo": "claude-opus"}
+{"agente": "revisor-autorizacion", "control": "SEG-IDOR", "hallazgo_id": null, "veredicto": "fail", "severidad_propuesta": "alta", "razon": "GET /api/citas/:id no filtra por el usuario dueño.", "ubicaciones": ["src/routes/citas.ts:42"], "modelo": "claude-opus", "requiere_verificacion_humana": false}
+{"agente": "revisor-ux", "control": "UX-HEURISTICA", "veredicto": "incierto", "razon": "Juicio del modelo sobre 4 capturas; requiere verificación humana.", "modelo": "claude-opus", "requiere_verificacion_humana": true}

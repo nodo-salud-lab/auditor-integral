@@ -1,0 +1,7 @@
+import DOMPurify from 'dompurify'
+
+// La nota viene del editor enriquecido; se sanitiza antes de insertarla.
+export default function NotaClinica({ nota }) {
+  const limpio = DOMPurify.sanitize(nota.html, { USE_PROFILES: { html: true } })
+  return <div className="nota" dangerouslySetInnerHTML={{ __html: limpio }} />
+}

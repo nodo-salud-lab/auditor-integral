@@ -1,0 +1,35 @@
+rules:
+  - id: monto-desde-body
+    message: >-
+      El monto del cobro viene del cuerpo de la petición. El cliente puede pagar lo que quiera
+      (por ejemplo 1 peso). Calcular el monto en el servidor desde la base de datos o el catálogo
+      de precios del proveedor.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-PAGOS-SERVIDOR
+      cwe: "CWE-602: Client-Side Enforcement of Server-Side Security"
+      categoria: vibe-coding
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.body
+      - pattern: $REQ.query
+      - pattern: (await $REQ.json())
+    pattern-sanitizers:
+      # Resultados leídos de la base de datos o del proveedor: el monto ya no viene del cliente.
+      - pattern: (await $DB.query(...))
+      - pattern: $DB.query(...)
+      - pattern: $DB.$MODELO.findUnique(...)
+      - pattern: $DB.$MODELO.findFirst(...)
+      - pattern: $DB.$MODELO.findUniqueOrThrow(...)
+      - pattern: $DB.from(...).select(...)
+      - pattern: $S.prices.retrieve(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: "$S.paymentIntents.create({..., amount: $V, ...}, ...)"
+              - pattern-inside: "$S.charges.create({..., amount: $V, ...}, ...)"
+              - pattern-inside: "$S.paymentIntents.update($ID, {..., amount: $V, ...}, ...)"
+              - pattern-inside: "{..., unit_amount: $V, ...}"
+              - pattern-inside: "{..., unit_amount_decimal: $V, ...}"
+          - focus-metavariable: $V

@@ -1,0 +1,16 @@
+{
+  "name": "auditor-integral",
+  "version": "0.2.0",
+  "description": "Auditor integral de proyectos vibe-coded: seguridad, datos, código, usabilidad, infraestructura, escala y operación. Combina escáneres deterministas con juicio LLM acotado y entrega un nivel de madurez N0-N5 por dominio con hoja de ruta.",
+  "author": {
+    "name": "Enzo Zapata"
+  },
+  "keywords": [
+    "auditoria",
+    "seguridad",
+    "vibe-coding",
+    "madurez",
+    "produccion"
+  ],
+  "license": "MIT"
+}

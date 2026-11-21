@@ -1,0 +1,21 @@
+rules:
+  - id: service-role-cliente
+    message: >-
+      La clave service_role de Supabase ($VAR) se lee desde una variable pública del bundle
+      del navegador. Esa clave salta RLS: quien abra la app puede leer y escribir toda la base.
+      Moverla a una función de servidor y rotarla.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-AUTH-CLIENTE
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          - pattern: import.meta.env.$VAR
+          - pattern: process.env.$VAR
+          - pattern: import.meta.env["$VAR"]
+          - pattern: process.env["$VAR"]
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ^(VITE_|NEXT_PUBLIC_|EXPO_PUBLIC_|REACT_APP_|PUBLIC_|NUXT_PUBLIC_|GATSBY_)\w*SERVICE_?ROLE\w*$

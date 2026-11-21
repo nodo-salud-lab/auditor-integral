@@ -1,0 +1,26 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabaseClient.js'
+
+export default function Perfil() {
+  const [perfil, setPerfil] = useState(null)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    async function cargar() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('id, nombre, telefono')
+        .eq('id', user.id)
+        .single()
+      if (error) setError('No se pudo cargar tu perfil')
+      else setPerfil(data)
+    }
+    cargar()
+  }, [])
+
+  if (error) return <p role="alert">{error}</p>
+  if (!perfil) return <p>Cargando…</p>
+  return <h2>Hola, {perfil.nombre}</h2>
+}

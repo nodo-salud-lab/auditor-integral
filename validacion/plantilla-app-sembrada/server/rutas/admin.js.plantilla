@@ -1,0 +1,18 @@
+import { Router } from 'express'
+import { pool } from '../db.js'
+
+const router = Router()
+
+// Listado completo de pacientes para el panel de administración
+router.get('/pacientes', async (req, res) => {
+  const { rows } = await pool.query('SELECT id, nombre, rut, email, diagnostico FROM pacientes')
+  res.json(rows)
+})
+
+// Cambiar el rol de un usuario
+router.post('/rol', async (req, res) => {
+  await pool.query('UPDATE usuarios SET rol = $1 WHERE id = $2', [req.body.rol, req.body.usuarioId])
+  res.sendStatus(204)
+})
+
+export default router

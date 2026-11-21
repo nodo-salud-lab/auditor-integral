@@ -1,0 +1,23 @@
+rules:
+  - id: catch-vacio
+    message: >-
+      Error silenciado: el bloque catch está vacío. Si algo falla (por ejemplo un cobro), nadie se
+      entera y el usuario queda esperando sin respuesta. Registrar el error y responder un mensaje claro.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-ERRORES
+      cwe: "CWE-390: Detection of Error Condition Without Action"
+      categoria: vibe-coding
+    pattern-either:
+      # Con variable: se informa en la línea del catch (focus en $E).
+      - patterns:
+          - pattern: |
+              try { ... } catch ($E) {}
+          - focus-metavariable: $E
+      - pattern: |
+          try { ... } catch {}
+      - pattern: $P.catch(() => {})
+      - pattern: $P.catch(($E) => {})
+      - pattern: $P.catch(function ($E) {})
+      - pattern: $P.catch(function () {})

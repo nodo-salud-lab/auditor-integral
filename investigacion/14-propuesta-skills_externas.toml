@@ -1,0 +1,279 @@
+# PROPUESTA (no activa) de dependencias opcionales de skills/plugins externos.
+# Fuente: investigacion/14-skills-externas.md (2026-11-18). DECISIÓN 7.
+# Verificado por revisor escéptico el 2026-11-18 (gh api): rutas, commits y licencias coinciden; ver §Verificación del informe 14.
+# Este archivo NO está en config/: lo revisa el investigador y, si lo aprueba,
+# el proceso de construcción lo mueve o adapta a config/skills_externas.toml.
+#
+# Campos:
+#   repo, ruta, commit_verificado (main al 2026-11-18 vía gh api), licencia
+#   puntaje_senal   = total del ranking §4 (ESTIMACIÓN de diseño; fórmula en §2)
+#   controles       = IDs de catalogo/controles.toml que complementa (no reemplaza)
+#   disparo         = condición sobre perfil.json / hallazgos normalizados
+#   modo            = "subagente" | "referencia" (leer archivo puntual) | "externo" (corre fuera, se ingiere su salida)
+#   salida          = contrato que recibe el hilo principal
+#   tope_hallazgos  = propuesta
+#   costo_tokens    = ESTIMACIÓN cualitativa (bajo|medio|alto), medir en el piloto
+#   requiere_confirmacion = true si gasta mucho o envía datos fuera
+#   instalado_local = estado al 2026-11-18
+
+[global]
+datos_excluidos = ["datos-reales/", "datos-abiertos/"]   # DECISIÓN 3: nunca entran a una skill
+descubrimiento = "solo installed_plugins.json + línea name: del frontmatter; nunca cargar el cuerpo en doctor"
+sin_dependencia = "el control usa su herramienta determinista o fallback y declara cobertura = 'parcial (fallback)'"
+registrar_version_en_informe = true
+
+# ---------------- Prioridad alta ----------------
+
+[skill.fp-check]
+repo = "trailofbits/skills"
+ruta = "plugins/fp-check"
+version_local = "1.0.5"
+licencia = "CC-BY-SA-4.0"
+puntaje_senal = 71.0
+controles = ["SEG-SAST-TRIAGE"]
+disparo = "hallazgo.severidad in ['critica','alta'] and hallazgo.metodo == 'determinista'"
+modo = "subagente"
+salida = "jsonl {fingerprint, veredicto: TRUE_POSITIVE|FALSE_POSITIVE|INCIERTO, razon<=40 palabras}"
+entrada = "hallazgo + 20 líneas de contexto"
+tope_hallazgos = 20
+costo_tokens = "medio"
+requiere_confirmacion = false
+instalado_local = true
+
+[skill.claude-security]
+repo = "anthropics/claude-plugins-official"
+ruta = "plugins/claude-security"
+commit_verificado = "e6143c9807a001832badb63e89d58ffe25d542ec"
+licencia = "Apache-2.0"
+puntaje_senal = 80.4
+controles = ["SEG-IDOR", "SEG-BFLA", "SEG-AUTH-CLIENTE", "SEG-MASIVA", "SEG-SSRF", "OPS-REAUDITORIA"]
+disparo = "nivel_objetivo >= 'N2' and (auth or datos_reales)"
+alcance = "rutas de rutas_inventario marcadas auth/api; modo 'scan changes' para re-auditoría"
+modo = "externo"
+salida = "CLAUDE-SECURITY-RESULTS.sarif -> normalizador SARIF; deduplicar por claudeSecurityPluginFindingId"
+esfuerzo = "low|medium (high solo a pedido)"
+costo_tokens = "alto"
+requiere_confirmacion = true
+instalado_local = false
+instalar = "/plugin install claude-security@claude-plugins-official"
+
+[skill.supabase-postgres-best-practices]
+repo = "supabase/agent-skills"
+ruta = "skills/supabase-postgres-best-practices"
+commit_verificado = "c9be0e931b7930f7d02126d04774d904c381e7d7"
+licencia = "MIT"
+puntaje_senal = 73.9
+controles = ["DAT-RLS-ON", "DAT-RLS-PERMISIVA", "DAT-GRANTS", "DAT-FK-INDICE", "DAT-PK-FK", "DAT-POOLER", "DAT-N+1", "DAT-PAGINACION", "DAT-TIPOS", "DAT-TRANSACCIONES", "DAT-CONSULTAS-LENTAS"]
+disparo = "stack.supabase and existe_hallazgo(dominio='DAT')"
+modo = "referencia"
+salida = "texto de remediación del archivo puntual (no se carga SKILL.md)"
+costo_tokens = "bajo"
+requiere_confirmacion = false
+instalado_local = false
+instalar = "npx skills add supabase/agent-skills --skill supabase-postgres-best-practices"
+
+[skill.supabase-postgres-best-practices.mapa_referencias]
+# control -> archivo en references/ (nombres verificados con gh api el 2026-11-18)
+"DAT-RLS-ON" = "security-rls-basics.md"
+"DAT-RLS-PERMISIVA" = "security-rls-basics.md"
+"DAT-GRANTS" = "security-privileges.md"
+"DAT-FK-INDICE" = "schema-foreign-key-indexes.md"
+"DAT-PK-FK" = "schema-primary-keys.md"
+"DAT-POOLER" = "conn-pooling.md"
+"DAT-N+1" = "data-n-plus-one.md"
+"DAT-PAGINACION" = "data-pagination.md"
+"DAT-TIPOS" = "schema-data-types.md"
+"DAT-TRANSACCIONES" = "lock-short-transactions.md"
+"DAT-CONSULTAS-LENTAS" = "monitor-pg-stat-statements.md"
+# Verificación 2026-11-18: los 11 archivos existen en main (c9be0e9). DAT-SECDEF no tiene archivo propio en references/.
+
+[skill.supabase-mcp-get_advisors]
+repo = "supabase/mcp"
+licencia = "Apache-2.0"
+puntaje_senal = 79.7
+controles = ["DAT-RLS-ON", "DAT-RLS-METADATA", "DAT-SECDEF", "DAT-GRANTS", "DAT-HIGIENE"]
+disparo = "stack.supabase and proyecto_remoto and permiso_dueno"
+alternativa_local = "splinter (SQL solo lectura)"
+modo = "externo"
+salida = "JSON de advisors -> normalizador; LLM ve conteos + top-N"
+costo_tokens = "bajo"
+requiere_confirmacion = true
+instalado_local = "MCP conectado en la sesión del investigador"
+
+[skill.gha-security-review]
+repo = "getsentry/skills"
+ruta = "skills/gha-security-review"
+commit_local = "f57ada2d0b640406ea7e25b11d636c530e77c58b"
+commit_verificado = "a582c51ee29d0f35e6ac321340796f77d43da733"
+licencia = "Apache-2.0"
+puntaje_senal = 71.2
+controles = ["SEG-CICD"]
+disparo = "existe('.github/workflows') and (zizmor.max_severidad >= 'alta' or usa_pull_request_target or usa_workflow_run)"
+modo = "subagente"
+entrada = "solo workflows marcados por zizmor"
+salida = "jsonl {fingerprint, regla, archivo, linea, severidad, confianza, resumen}"
+tope_hallazgos = 20
+costo_tokens = "medio"
+requiere_confirmacion = false
+instalado_local = true
+
+[skill.skill-scanner]
+repo = "getsentry/skills"
+ruta = "skills/skill-scanner"
+commit_local = "f57ada2d0b640406ea7e25b11d636c530e77c58b"
+licencia = "Apache-2.0"
+puntaje_senal = 71.2
+controles = ["SEG-AGENTES-IA"]
+disparo = "existe_alguno(['.claude/', '.cursor/', 'AGENTS.md', '.mcp.json'])"
+modo = "subagente"
+salida = "jsonl"
+tope_hallazgos = 20
+costo_tokens = "bajo"
+requiere_confirmacion = false
+instalado_local = true
+
+[skill.secret-serialization]
+repo = "getsentry/skills"
+ruta = "skills/secret-serialization"
+commit_local = "f57ada2d0b640406ea7e25b11d636c530e77c58b"
+licencia = "Apache-2.0"
+puntaje_senal = 71.2
+controles = ["SEG-SECRETO-REPO", "OPS-LOGS-ESTRUCTURADOS"]
+disparo = "grep_determinista('password|token|secret|api_key') en modelos/serializadores > 0"
+modo = "subagente"
+entrada = "solo archivos que coinciden con el grep"
+salida = "jsonl"
+tope_hallazgos = 20
+costo_tokens = "bajo"
+requiere_confirmacion = false
+instalado_local = true
+
+# ---------------- Prioridad media (condicional) ----------------
+
+[skill.sentry-security-review]
+repo = "getsentry/skills"
+ruta = "skills/security-review"
+commit_verificado = "a582c51ee29d0f35e6ac321340796f77d43da733"
+licencia = "Apache-2.0"
+puntaje_senal = 71.2
+controles = ["SEG-IDOR", "SEG-BFLA", "SEG-AUTH-CLIENTE", "SEG-MASIVA"]
+disparo = "nivel_objetivo == 'N2' or claude-security no confirmado"
+nota = "alternativa ligera a claude-security; evidencia: reseña timonweb 2026-02-25"
+modo = "subagente"
+costo_tokens = "medio"
+instalado_local = false
+
+[skill.spec-to-code-compliance]
+repo = "trailofbits/skills"
+ruta = "plugins/spec-to-code-compliance"
+commit_verificado = "149d7b21f4067765b82e67029730b42d228ef4b4"
+licencia = "CC-BY-SA-4.0"
+puntaje_senal = 71.0
+controles = ["COD-FLUJOGRAMA", "COD-CRITERIOS"]
+disparo = "perfil.flujograma or perfil.criterios_aceptacion"
+modo = "subagente"
+costo_tokens = "medio"
+instalado_local = false
+
+[skill.mutation-testing]
+repo = "trailofbits/skills"
+ruta = "plugins/mutation-testing"
+licencia = "CC-BY-SA-4.0"
+puntaje_senal = 71.0
+controles = ["COD-MUTACION"]
+disparo = "nivel_objetivo >= 'N4' and modulos_criticos"
+modo = "subagente"
+costo_tokens = "medio"
+instalado_local = false
+
+[skill.agentic-actions-auditor]
+repo = "trailofbits/skills"
+ruta = "plugins/agentic-actions-auditor"
+licencia = "CC-BY-SA-4.0"
+puntaje_senal = 71.0
+controles = ["SEG-CICD"]
+disparo = "workflows invocan agentes IA (p. ej. claude-code-action)"
+modo = "subagente"
+costo_tokens = "medio"
+instalado_local = false
+
+[skill.semgrep-rule-creator]
+repo = "trailofbits/skills"
+ruta = "plugins/semgrep-rule-creator"
+licencia = "CC-BY-SA-4.0"
+puntaje_senal = 71.0
+controles = []
+uso = "tiempo de construcción de reglas/ propias, no en cada auditoría"
+instalado_local = false
+
+[skill.lsp]
+repo = "anthropics/claude-plugins-official"
+rutas = ["plugins/typescript-lsp", "plugins/pyright-lsp"]
+licencia = "Apache-2.0"
+puntaje_senal = 80.4
+controles = ["COD-TIPOS"]
+disparo = "no hay tsc/pyright configurado en el proyecto"
+modo = "externo"
+costo_tokens = "bajo"
+instalado_local = false
+
+[skill.web-quality-skills]
+repo = "addyosmani/web-quality-skills"
+rutas = ["skills/accessibility", "skills/core-web-vitals"]
+licencia = "MIT"
+puntaje_senal = 48.5
+controles = ["UX-AXE-CRIT", "UX-AXE-SERIOUS", "UX-LCP-LAB", "UX-CWV-CAMPO"]
+disparo = "existe_hallazgo(dominio='UX')"
+modo = "referencia"
+nota = "solo texto de remediación; NO entra al IUA (determinista, PLAN §5.1)"
+costo_tokens = "bajo"
+instalado_local = false
+
+[skill.terraform]
+repo = "hashicorp/agent-skills"
+ruta = "plugins/terraform"
+licencia = "MPL-2.0"
+puntaje_senal = 57.3
+controles = ["INF-IAC"]
+disparo = "existe('*.tf')"
+modo = "referencia"
+costo_tokens = "bajo"
+instalado_local = false
+
+[skill.workers-best-practices]
+repo = "cloudflare/skills"
+ruta = "skills/workers-best-practices"
+commit_local = "86505e44f87d801aa1864a3c4109e9a8ae5c409f"
+licencia = "Apache-2.0"
+puntaje_senal = 63.6
+controles = ["INF-PLATAFORMA", "INF-TAREAS-LARGAS"]
+disparo = "existe_alguno(['wrangler.toml', 'wrangler.jsonc'])"
+modo = "subagente"
+costo_tokens = "bajo"
+instalado_local = true
+
+[skill.llm-security]
+repo = "semgrep/skills"
+ruta = "skills/llm-security"
+licencia = "Semgrep Rules License v1.0 (NO VERIFICADO alcance)"
+puntaje_senal = 62.5
+controles = ["SEG-LLM-SALIDA", "SEG-LLM-AGENCIA", "SEG-REDTEAM-LLM"]
+disparo = "deps incluyen openai | @anthropic-ai/sdk | langchain | ai"
+modo = "referencia"
+bloqueo = "revisar licencia antes de adoptar"
+costo_tokens = "bajo"
+instalado_local = false
+
+# ---------------- Excluidas como dependencia ----------------
+
+[excluida]
+"security-guidance" = "hook de desarrollo con LLM en cada Stop/commit; no produce SARIF; mantener solo para desarrollo"
+"anthropics/claude-code-security-review" = "280 días sin push (puntaje corregido 57.3); excluye DoS/rate limit; usar solo como comparador en validación"
+"semgrep/mcp" = "archivado (archived=true, último push 2025-10-28)"
+"vercel-labs/web-design-guidelines" = "descarga reglas remotas en cada corrida: no reproducible y superficie de inyección; sin SPDX"
+"snyk/agent-scan" = "envía contenido de skills/MCP a la API de Snyk (redacta secretos antes, según README) y requiere SNYK_TOKEN; incompatible con DECISIÓN 3; solo opt-in con confirmación en otros proyectos"
+"affaan-m/ECC" = "colección masiva; su security-review es checklist estático (reseña timonweb)"
+"wshobson/agents" = "colección masiva; infla el contexto"
+"agamm/claude-code-owasp" = "autor individual, baja adopción; fuente de ideas"
+"OWASP/secure-agent-playbook" = "usar como referencia (citar y reescribir), reevaluar en 6 meses"
+"security-audit (local)" = "sin ORIGEN.txt ni LICENSE: registrar procedencia antes de usar"

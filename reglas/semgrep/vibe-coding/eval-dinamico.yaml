@@ -1,0 +1,32 @@
+rules:
+  - id: eval-dinamico
+    message: >-
+      Código evaluado dinámicamente a partir de un valor no literal. Si el valor viene del usuario
+      es ejecución remota de código. Reemplazar por un parser o una tabla de operaciones permitidas.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-SAST-INY
+      cwe: "CWE-95: Eval Injection"
+      categoria: vibe-coding
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($X)
+              - pattern: new Function(..., $X)
+              - pattern: Function(..., $X)
+              - pattern: $VM.runInNewContext($X, ...)
+              - pattern: $VM.runInThisContext($X, ...)
+              - pattern: $VM.runInContext($X, ...)
+          - pattern-not: eval("...")
+          - pattern-not: new Function(..., "...")
+          - pattern-not: Function(..., "...")
+      # setTimeout/setInterval con una cadena construida: se evalúa como código.
+      - patterns:
+          - pattern-either:
+              - pattern: $TIMER("..." + $X, ...)
+              - pattern: $TIMER($X + "...", ...)
+              - pattern: $TIMER(`...${$X}...`, ...)
+          - metavariable-regex:
+              metavariable: $TIMER
+              regex: ^(window\.)?(setTimeout|setInterval)$

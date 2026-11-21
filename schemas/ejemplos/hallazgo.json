@@ -1,0 +1,20 @@
+{
+  "id": "H-7f3a9c",
+  "control": "SEG-SECRETO-BUNDLE",
+  "alias": ["VC-05", "SEC-02", "DB-05", "ECO-06"],
+  "dominio": "SEG",
+  "etapa": "E2",
+  "gate": "N1",
+  "severidad": "critica",
+  "confianza": "alta",
+  "metodo": "determinista",
+  "fuente": [{"herramienta": "gitleaks", "version": "8.30.1", "regla": "generic-api-key"}],
+  "ubicacion": {"archivo": "dist/assets/index-abc.js", "linea": 1, "url": null, "objeto_bd": null, "commit": "a1b2c3d"},
+  "evidencia": "const k=\"sk_live_****…a9F2\"",
+  "fingerprint": "3b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c",
+  "estado_hallazgo": "abierto",
+  "triage": null,
+  "remediacion": "Mover la llamada a una función de servidor y rotar la clave.",
+  "referencias": ["CWE-798", "OWASP A07:2025", "https://cheatsheetseries.owasp.org/"],
+  "esfuerzo": "S"
+}

@@ -1,0 +1,3 @@
+# Configuración propia y vacía de osv-scanner (se pasa con --config).
+# Reemplaza cualquier osv-scanner.toml del proyecto auditado: un repo no puede silenciar
+# vulnerabilidades con [[IgnoredVulns]] ni [[PackageOverrides]] ignore = true.

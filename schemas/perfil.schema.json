@@ -1,0 +1,479 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auditor-integral.local/schemas/perfil.schema.json",
+  "title": "Perfil de riesgo",
+  "description": "perfil.json (PLAN_MAESTRO §3.6): banderas detectadas por archivos (detectar_stack.py) o declaradas en la entrevista E0/E5. null = sin respuesta / no determinado: sus controles quedan no_evaluado. No se asume la respuesta.",
+  "type": "object",
+  "required": [
+    "version_esquema",
+    "banderas"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version_esquema": {
+      "const": "1"
+    },
+    "banderas": {
+      "type": "object",
+      "required": [
+        "baas",
+        "ssr_serverless",
+        "llm",
+        "pagos",
+        "emails",
+        "docker",
+        "iac",
+        "k8s",
+        "movil",
+        "pwa",
+        "multi_idioma",
+        "agente_ia",
+        "datos_personales",
+        "salud",
+        "menores",
+        "ue",
+        "datos_reales_cargados",
+        "usuarios_3m",
+        "usuarios_12m"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "baas": {
+          "enum": [
+            "supabase",
+            "firebase",
+            "ninguno",
+            null
+          ]
+        },
+        "ssr_serverless": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "llm": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pagos": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "emails": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "docker": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "iac": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "k8s": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "movil": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pwa": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "multi_idioma": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "agente_ia": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "servidor": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Backend propio, SSR/serverless o contenedor (detectar_stack.py). Opcional: sin ella, se toma de perfil_tecnico.json."
+        },
+        "bd": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Base de datos propia o BaaS (driver, ORM, BaaS o migraciones). Opcional: sin ella, se toma de perfil_tecnico.json."
+        },
+        "datos_personales": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Solo por entrevista."
+        },
+        "salud": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Solo por entrevista."
+        },
+        "menores": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Solo por entrevista."
+        },
+        "ue": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Solo por entrevista."
+        },
+        "datos_reales_cargados": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Solo por entrevista."
+        },
+        "usuarios_3m": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Solo por entrevista."
+        },
+        "usuarios_12m": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Solo por entrevista."
+        }
+      }
+    },
+    "origen_banderas": {
+      "type": "object",
+      "description": "Por bandera: de dónde salió el valor.",
+      "additionalProperties": {
+        "enum": [
+          "archivos",
+          "entrevista",
+          "ambos",
+          "sin_dato"
+        ]
+      }
+    },
+    "entrevista": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modo": {
+          "enum": [
+            "rapido",
+            "estandar",
+            "profundo",
+            null
+          ]
+        },
+        "respuestas": {
+          "type": "object",
+          "description": "Clave = número de pregunta E0/E5 (1-16). null = sin respuesta.",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "flujograma": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "archivo": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "estado": {
+          "enum": [
+            "borrador",
+            "confirmado"
+          ]
+        }
+      }
+    },
+    "tecnico": {
+      "$ref": "#/$defs/perfil_tecnico"
+    },
+    "fecha": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Fecha (AAAA-MM-DD) de la entrevista o de la corrida en que se registró (scripts/perfil.py)."
+    },
+    "declaraciones": {
+      "type": "object",
+      "description": "Por bandera declarada por el creador: valor, fecha, fuente y pregunta (estado.py lee datos_personales.fecha).",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["valor", "fecha", "fuente"],
+        "additionalProperties": false,
+        "properties": {
+          "valor": {"type": ["boolean", "integer", "string", "null"]},
+          "fecha": {"type": ["string", "null"], "maxLength": 10},
+          "fuente": {"type": "string", "maxLength": 60},
+          "pregunta": {"type": ["integer", "null"], "minimum": 1, "maximum": 16}
+        }
+      }
+    },
+    "sinteticos": {
+      "type": "object",
+      "description": "Rutas de datos SINTÉTICOS declaradas por el creador (AUD-SINT). Las decide el creador; el auditor no las completa.",
+      "additionalProperties": false,
+      "properties": {
+        "rutas": {"$ref": "#/$defs/lista_texto"},
+        "descartadas": {"$ref": "#/$defs/lista_texto"},
+        "fecha": {"type": ["string", "null"], "maxLength": 10},
+        "fuente": {"type": "string", "maxLength": 60}
+      }
+    },
+    "pendientes_entrevista": {
+      "type": "object",
+      "description": "Pregunta (1-16) sin respuesta → controles que no pueden quedar en pass y banderas sin dato. No se asume la respuesta.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "controles": {"$ref": "#/$defs/lista_texto"},
+          "banderas": {"$ref": "#/$defs/lista_texto"},
+          "preguntada": {"type": "boolean"}
+        }
+      }
+    },
+    "discrepancias": {
+      "$ref": "#/$defs/lista_texto",
+      "description": "Banderas donde la entrevista contradice a los archivos (gana la evidencia de archivos)."
+    },
+    "advertencias": {
+      "$ref": "#/$defs/lista_texto",
+      "description": "Respuestas o declaraciones inválidas que se ignoraron (quedan sin dato)."
+    }
+  },
+  "$defs": {
+    "lista_texto": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 300
+      }
+    },
+    "ecosistema": {
+      "type": "object",
+      "required": [
+        "gestor",
+        "manifiestos",
+        "lockfiles"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "gestor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 40
+        },
+        "manifiestos": {
+          "$ref": "#/$defs/lista_texto"
+        },
+        "lockfiles": {
+          "$ref": "#/$defs/lista_texto"
+        }
+      }
+    },
+    "perfil_tecnico": {
+      "type": "object",
+      "description": "Salida de detectar_stack.py (perfil_tecnico.json). Solo banderas detectables por archivos.",
+      "required": [
+        "version_esquema",
+        "generador",
+        "lenguajes",
+        "frameworks",
+        "ecosistemas",
+        "baas",
+        "orm",
+        "ssr_serverless",
+        "llm",
+        "pagos",
+        "emails",
+        "docker",
+        "iac",
+        "k8s",
+        "movil",
+        "pwa",
+        "multi_idioma",
+        "agente_ia",
+        "ci",
+        "carpetas_build",
+        "detalle",
+        "evidencia",
+        "limites"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version_esquema": {
+          "const": "1"
+        },
+        "generador": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "lenguajes": {
+          "$ref": "#/$defs/lista_texto"
+        },
+        "frameworks": {
+          "$ref": "#/$defs/lista_texto"
+        },
+        "ecosistemas": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ecosistema"
+          }
+        },
+        "baas": {
+          "enum": [
+            "supabase",
+            "firebase",
+            "ninguno"
+          ]
+        },
+        "orm": {
+          "$ref": "#/$defs/lista_texto"
+        },
+        "ssr_serverless": {
+          "type": "boolean"
+        },
+        "llm": {
+          "type": "boolean"
+        },
+        "pagos": {
+          "type": "boolean"
+        },
+        "emails": {
+          "type": "boolean"
+        },
+        "docker": {
+          "type": "boolean"
+        },
+        "iac": {
+          "type": "boolean"
+        },
+        "k8s": {
+          "type": "boolean"
+        },
+        "movil": {
+          "type": "boolean"
+        },
+        "pwa": {
+          "type": "boolean"
+        },
+        "multi_idioma": {
+          "type": "boolean"
+        },
+        "agente_ia": {
+          "type": "boolean"
+        },
+        "ci": {
+          "type": "boolean"
+        },
+        "servidor": {
+          "type": "boolean",
+          "description": "Backend propio, SSR/serverless, Docker o k8s."
+        },
+        "bd": {
+          "type": "boolean",
+          "description": "Driver o ORM de BD, BaaS o migraciones .sql."
+        },
+        "carpetas_build": {
+          "$ref": "#/$defs/lista_texto"
+        },
+        "detalle": {
+          "type": "object",
+          "description": "Proveedores/SDK concretos por bandera (p. ej. llm: [openai], ci: [github_actions]).",
+          "additionalProperties": {
+            "$ref": "#/$defs/lista_texto"
+          }
+        },
+        "evidencia": {
+          "type": "object",
+          "description": "Por bandera: archivos (relativos) que la activaron; máximo 10 por bandera.",
+          "additionalProperties": {
+            "$ref": "#/$defs/lista_texto"
+          }
+        },
+        "evidencia_secundaria": {
+          "type": "object",
+          "description": "Por bandera: archivos de tests o fixtures (comun.es_test_o_fixture) que la habrían activado; no encienden la bandera. Máximo 10 por bandera.",
+          "additionalProperties": {
+            "$ref": "#/$defs/lista_texto"
+          }
+        },
+        "limites": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "archivos_vistos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "truncado": {
+              "type": "boolean"
+            },
+            "excluidos": {
+              "$ref": "#/$defs/lista_texto"
+            }
+          }
+        },
+        "plataformas_despliegue": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plataformas de despliegue detectadas (ronda 3; INF-INVENTARIO exige ≥ 1)."
+        }
+      }
+    }
+  }
+}

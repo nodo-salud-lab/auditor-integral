@@ -1,0 +1,54 @@
+rules:
+  - id: comando-concatenado
+    message: >-
+      Comando de sistema armado concatenando o interpolando valores y ejecutado con una shell
+      (child_process.exec/execSync o spawn con shell: true). Si algún valor viene del usuario es
+      inyección de comandos. Usar execFile/spawn con una lista de argumentos y sin shell.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-SAST-INY
+      cwe: "CWE-78: OS Command Injection"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          # Módulo child_process importado con nombre (require o import).
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      $CP = require($MOD)
+                      ...
+                  - pattern-inside: |
+                      import $CP from $MOD
+                      ...
+                  - pattern-inside: |
+                      import * as $CP from $MOD
+                      ...
+              - pattern-either:
+                  - patterns:
+                      - pattern: $CP.$F($CMD, ...)
+                      - metavariable-regex:
+                          metavariable: $F
+                          regex: ^(exec|execSync)$
+                  - pattern: '$CP.spawn($CMD, {..., shell: true, ...})'
+                  - pattern: '$CP.spawnSync($CMD, {..., shell: true, ...})'
+          # Funciones desestructuradas: const { exec } = require('child_process') / import { exec } from ...
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      const {..., $F, ...} = require($MOD)
+                      ...
+                  - pattern-inside: |
+                      import { $F } from $MOD
+                      ...
+              - pattern: $F($CMD, ...)
+              - metavariable-regex:
+                  metavariable: $F
+                  regex: ^(exec|execSync)$
+      - metavariable-regex:
+          metavariable: $MOD
+          regex: ^['"]?(node:)?child_process['"]?$
+      # El comando contiene un valor no literal: '+' junto a algo que no es una comilla, o ${...}.
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: (?s).*(\+\s*[^\s'"`]|[^\s'"`]\s*\+|\$\{)

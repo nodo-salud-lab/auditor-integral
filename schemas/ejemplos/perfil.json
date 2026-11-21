@@ -1,0 +1,12 @@
+{
+  "version_esquema": "1",
+  "banderas": {
+    "baas": "supabase", "ssr_serverless": false, "llm": true, "pagos": false, "emails": false,
+    "docker": false, "iac": false, "k8s": false, "movil": false, "pwa": false, "multi_idioma": false, "agente_ia": true,
+    "datos_personales": true, "salud": true, "menores": false, "ue": null, "datos_reales_cargados": null,
+    "usuarios_3m": 50, "usuarios_12m": null
+  },
+  "origen_banderas": {"baas": "archivos", "llm": "ambos", "salud": "entrevista", "ue": "sin_dato"},
+  "entrevista": {"modo": "estandar", "respuestas": {"1": "Agenda de kinesiología para pacientes ambulatorios.", "9": null}},
+  "flujograma": {"archivo": "flujograma.mmd", "estado": "borrador"}
+}

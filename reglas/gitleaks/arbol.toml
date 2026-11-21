@@ -1,0 +1,38 @@
+# Configuración de gitleaks del auditor-integral para el escaneo del árbol de trabajo.
+# Igual a base.toml pero excluye dist/, build/, .next/ y out/: esas carpetas se escanean aparte
+# (gitleaks-bundle.json) para que el hallazgo se asigne a SEG-SECRETO-BUNDLE y no se duplique.
+# Se pasa SIEMPRE con --config: así un .gitleaks.toml del proyecto auditado no puede
+# desactivar reglas (sería una vía de evasión). Extiende la configuración por defecto.
+title = "auditor-integral (árbol, sin carpetas de build)"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Carpetas que no son código del proyecto"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.auditoria/''',
+  '''(^|/)\.next/cache/''',
+  '''(^|/)(dist|build|\.next|out)/''',
+  # Bytecode de Python: derivado de un .py que sí se escanea. Python pliega concatenaciones de literales en el .pyc
+  # y produce cadenas con forma de secreto que el fuente no tiene (falsos positivos sin pérdida de recall).
+  '''(^|/)__pycache__/''',
+  '''\.py[co]$''',
+  # Ronda 6 (secretos): entornos virtuales y cachés de herramientas. Son código de terceros o derivados que git
+  # no versiona; escanearlos producía bloqueos por archivos no versionados (.pytest_cache/v/cache/nodeids con IDs de
+  # tests, supabase/.temp con claves locales) y timeouts en repos con .venv de GB. Un entorno con nombre libre se
+  # detecta por pyvenv.cfg y se agrega en cada corrida (adaptadores/gitleaks.sh). El historial git (base.toml)
+  # no los excluye: lo que se versionó cuenta.
+  '''(^|/)(\.venv|venv|\.nox|\.tox|site-packages|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.cache)/''',
+  '''(^|/)supabase/\.temp/''',
+]
+
+[[allowlists]]
+description = "Claves publicables por diseño (no son secretos)"
+regexTarget = "match"
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_-]+''',
+  '''pk_(live|test)_[A-Za-z0-9]+''',
+]

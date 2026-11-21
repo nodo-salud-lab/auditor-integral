@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auditor-integral.local/schemas/hallazgo.schema.json",
+  "title": "Hallazgo",
+  "description": "Un hallazgo normalizado (una línea de hallazgos.jsonl). Contrato entre scripts y LLM (PLAN_MAESTRO §3.5). La severidad la fija el catálogo; la herramienta puede subirla, no bajarla.",
+  "$comment": "Regla no expresable en el subconjunto soportado: estado_hallazgo = 'aceptado' exige 'aceptacion' y nunca se admite para críticos de N1; la verifica gates.py.",
+  "type": "object",
+  "required": ["id", "control", "dominio", "etapa", "gate", "severidad", "confianza", "metodo", "fuente", "ubicacion", "evidencia", "fingerprint", "estado_hallazgo"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^H-[0-9a-f]{6,64}$"},
+    "control": {"type": "string", "pattern": "^(SEG|DAT|COD|UX|INF|ESC|OPS)-[A-Z0-9+-]+$"},
+    "alias": {"type": "array", "items": {"type": "string", "maxLength": 40}},
+    "dominio": {"enum": ["SEG", "DAT", "COD", "UX", "INF", "ESC", "OPS"]},
+    "etapa": {"type": "string", "pattern": "^E[0-6]$"},
+    "gate": {"enum": ["N1", "N2", "N3", "N4", "N5"]},
+    "severidad": {"enum": ["critica", "alta", "media", "baja", "info"]},
+    "confianza": {"enum": ["alta", "media", "baja"]},
+    "metodo": {"enum": ["determinista", "mixto", "llm", "manual"]},
+    "fuente": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["herramienta"],
+        "additionalProperties": false,
+        "properties": {
+          "herramienta": {"type": "string", "minLength": 1, "maxLength": 60},
+          "version": {"type": ["string", "null"], "maxLength": 60},
+          "regla": {"type": ["string", "null"], "maxLength": 200}
+        }
+      }
+    },
+    "ubicacion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "archivo": {"type": ["string", "null"], "maxLength": 500},
+        "linea": {"type": ["integer", "null"], "minimum": 0},
+        "url": {"type": ["string", "null"], "maxLength": 1000},
+        "objeto_bd": {"type": ["string", "null"], "maxLength": 300},
+        "commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7,40}$"}
+      }
+    },
+    "evidencia": {"type": "string", "maxLength": 300, "description": "Ya enmascarada."},
+    "instancias_extra": {"type": "integer", "minimum": 0, "description": "Instancias omitidas del mismo (control, archivo): 'y N más'. Máximo 5 se listan."},
+    "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256(control|archivo_normalizado|regla|snippet_normalizado) en hex."},
+    "estado_hallazgo": {"enum": ["abierto", "falso_positivo", "aceptado"]},
+    "aceptacion": {
+      "type": ["object", "null"],
+      "required": ["firma", "fecha", "vencimiento", "razon"],
+      "additionalProperties": false,
+      "properties": {
+        "firma": {"type": "string", "minLength": 1, "maxLength": 120},
+        "fecha": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "vencimiento": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "razon": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "triage": {
+      "type": ["object", "null"],
+      "required": ["veredicto", "razon", "modelo"],
+      "additionalProperties": false,
+      "properties": {
+        "veredicto": {"enum": ["verdadero", "falso_positivo", "incierto"]},
+        "razon": {"type": "string", "minLength": 1, "maxLength": 300},
+        "modelo": {"type": "string", "minLength": 1, "maxLength": 80}
+      }
+    },
+    "verificacion_humana": {
+      "$comment": "H-2 (DECISIONES.md #11): solo en memoria (estado.py/gates.py) desde <proyecto>/.auditor-integral/fp-verificados.json, que escribe una persona; nunca lo produce la IA ni la normalización.",
+      "type": ["object", "null"],
+      "required": ["quien", "fecha", "conclusion"],
+      "additionalProperties": false,
+      "properties": {
+        "quien": {"type": "string", "minLength": 1, "maxLength": 300},
+        "fecha": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "conclusion": {"type": "string", "minLength": 1, "maxLength": 300}
+      }
+    },
+    "remediacion": {"type": ["string", "null"], "maxLength": 600},
+    "referencias": {"type": "array", "items": {"type": "string", "maxLength": 300}},
+    "esfuerzo": {"enum": ["XS", "S", "M", "L", "XL", null]}
+  }
+}

@@ -1,0 +1,29 @@
+{
+ "hallazgos": [
+  {
+   "regla": "check:env_publicas.nombre_sensible",
+   "archivo": ".env",
+   "linea": 8,
+   "mensaje": "Variable pública (VITE_) con nombre sensible: VITE_OPENAI_API_KEY",
+   "evidencia": "VITE_OPENAI_API_KEY=@@CANARIO:C03@@",
+   "severidad_sugerida": "critica"
+  },
+  {
+   "regla": "check:env_publicas.nombre_sensible",
+   "archivo": ".env",
+   "linea": 11,
+   "mensaje": "Variable pública (VITE_) con nombre sensible: VITE_SUPABASE_SERVICE_ROLE_KEY",
+   "evidencia": "VITE_SUPABASE_SERVICE_ROLE_KEY=@@CANARIO:C01@@",
+   "severidad_sugerida": "critica"
+  },
+  {
+   "regla": "check:env_publicas.nombre_sensible",
+   "archivo": ".env",
+   "linea": 14,
+   "mensaje": "Variable pública (VITE_) con nombre sensible: VITE_STRIPE_SECRET_KEY",
+   "evidencia": "VITE_STRIPE_SECRET_KEY=@@CANARIO:C06@@",
+   "severidad_sugerida": "critica"
+  }
+ ],
+ "checks_pass": []
+}

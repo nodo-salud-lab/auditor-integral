@@ -1,0 +1,16 @@
+import { Router } from 'express'
+import { createClient } from '@supabase/supabase-js'
+import { config } from '../config.js'
+
+const router = Router()
+const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey)
+
+// Inicio de sesión desde la app móvil (sin límite de intentos)
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) return res.status(401).json({ error: 'Credenciales inválidas' })
+  res.json({ token: data.session.access_token })
+})
+
+export default router

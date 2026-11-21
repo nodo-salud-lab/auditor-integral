@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# auditar-aqui — audita el proyecto del directorio actual y termina con un resumen legible.
+#
+# Uso (desde la carpeta del proyecto):
+#   auditar-aqui --sin-red [--modo rapido|estandar|profundo]
+#   auditar-aqui --con-red [--modo rapido|estandar|profundo]
+#
+# Es un envoltorio delgado: anuncia la ruta, se niega a auditar carpetas que no son un proyecto, llama a
+# 'bin/auditar all "$PWD"' (no reimplementa ninguna fase) y al final corre scripts/resumen_corrida.py, que lee
+# solo gates.json y run.json. La red se elige siempre de forma explícita (--con-red o --sin-red); sin ninguna
+# de las dos termina con rc 2. AUDITOR_SIN_RED=1 en el entorno cuenta como --sin-red.
+#
+# Se niega (rc 2) si el directorio actual es /, $HOME, la raíz del propio auditor, una carpeta .auditoria/
+# (o una corrida) o una carpeta sin archivos de proyecto (sin package.json, pyproject.toml, requirements*.txt,
+# .git ni código fuente a 3 niveles de profundidad).
+#
+# Salida: el progreso y el resumen van a stderr; la última línea de stdout es la carpeta de la corrida, igual
+# que en 'auditar'. Código de salida: el de 'auditar all' (0 ok · 1 falló una fase · 2 uso · 3 pendiente).
+set -u
+
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+PY="${AUDITOR_PYTHON:-python3}"
+
+ayuda() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+error_uso() { echo "auditar-aqui: $*" >&2; echo "Use 'auditar-aqui --help'." >&2; exit 2; }
+
+MODO=""; RED=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) ayuda; exit 0 ;;
+    --modo) [ $# -ge 2 ] || error_uso "--modo requiere valor"; MODO="$2"; shift 2 ;;
+    --modo=*) MODO="${1#--modo=}"; shift ;;
+    --sin-red|--offline) [ "$RED" = con ] && error_uso "--sin-red y --con-red son excluyentes"; RED=sin; shift ;;
+    --con-red) [ "$RED" = sin ] && error_uso "--sin-red y --con-red son excluyentes"; RED=con; shift ;;
+    --mode|--mode=*) error_uso "opción desconocida: $1 (¿quiso decir --modo?)" ;;
+    -*) error_uso "opción desconocida: $1" ;;
+    *) error_uso "auditar-aqui no recibe RUTA: audita el directorio actual. Para otra carpeta use: bin/auditar all \"$1\"" ;;
+  esac
+done
+
+if [ -n "$MODO" ]; then
+  case "$MODO" in rapido|estandar|profundo) ;; *) error_uso "modo inválido: $MODO (rapido|estandar|profundo)" ;; esac
+fi
+
+# AUDITOR_SIN_RED en el entorno es una decisión explícita de no usar la red (cualquier valor distinto de vacío o 0).
+SIN_RED_ENV=""
+case "${AUDITOR_SIN_RED:-}" in ""|0) ;; *) SIN_RED_ENV=1 ;; esac
+if [ "$RED" = con ] && [ -n "$SIN_RED_ENV" ]; then
+  error_uso "--con-red contradice AUDITOR_SIN_RED=${AUDITOR_SIN_RED} en el entorno; quite una de las dos"
+fi
+[ -z "$RED" ] && [ -n "$SIN_RED_ENV" ] && RED=sin
+if [ -z "$RED" ]; then
+  echo "auditar-aqui: falta elegir la red. Agregue --sin-red (ninguna fase consulta servicios externos) o" >&2
+  echo "auditar-aqui: --con-red (osv.dev, registro npm/PyPI y registro de semgrep; envía nombres y versiones de paquetes, no código)." >&2
+  exit 2
+fi
+
+AQUI="$(pwd -P)" || error_uso "no se pudo resolver el directorio actual"
+HOME_REAL="$(cd "${HOME:-/nonexistent}" 2>/dev/null && pwd -P || true)"
+
+[ "$AQUI" = "/" ] && error_uso "el directorio actual es /: entre a la carpeta del proyecto"
+[ -n "$HOME_REAL" ] && [ "$AQUI" = "$HOME_REAL" ] && error_uso "el directorio actual es su carpeta personal ($AQUI): entre a la carpeta del proyecto"
+[ "$AQUI" = "$RAIZ" ] && error_uso "el directorio actual es el propio auditor ($AQUI): entre a la carpeta del proyecto que quiere auditar"
+case "$AQUI/" in
+  */.auditoria/*) error_uso "el directorio actual está dentro de una carpeta .auditoria/ (salida de una corrida): vuelva a la carpeta del proyecto" ;;
+esac
+[ -f "$AQUI/run.json" ] && error_uso "el directorio actual parece una carpeta de corrida (tiene run.json): vuelva a la carpeta del proyecto"
+
+es_proyecto() {
+  local m
+  for m in package.json pyproject.toml setup.py setup.cfg Pipfile go.mod Cargo.toml Gemfile composer.json \
+           pom.xml build.gradle deno.json .git; do
+    [ -e "$AQUI/$m" ] && return 0
+  done
+  ls "$AQUI"/requirements*.txt >/dev/null 2>&1 && return 0
+  find "$AQUI" -maxdepth 3 \( -name node_modules -o -name .auditoria -o -name .venv -o -name venv \) -prune -o \
+       -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' \
+       -o -name '*.py' -o -name '*.go' -o -name '*.rb' -o -name '*.php' -o -name '*.java' -o -name '*.kt' \
+       -o -name '*.rs' -o -name '*.cs' -o -name '*.swift' -o -name '*.vue' -o -name '*.svelte' -o -name '*.html' \
+       -o -name '*.sql' -o -name '*.dart' \) -print 2>/dev/null | head -n 1 | grep -q .
+}
+es_proyecto || error_uso "no hay archivos de proyecto en $AQUI (ni package.json, pyproject, requirements, .git ni código): ¿es la carpeta correcta?"
+
+echo "Auditando: $AQUI" >&2
+echo "Red: $([ "$RED" = sin ] && echo 'sin red (--sin-red)' || echo 'con red (--con-red)') · modo: ${MODO:-estandar}" >&2
+
+ARGS=(all "$AQUI")
+[ -n "$MODO" ] && ARGS+=(--modo "$MODO")
+[ "$RED" = sin ] && ARGS+=(--sin-red)
+
+SALIDA_STD="$("$RAIZ/bin/auditar" "${ARGS[@]}")"
+CODIGO=$?
+CORRIDA="$(printf '%s\n' "$SALIDA_STD" | tail -n 1)"
+
+if [ -n "$CORRIDA" ] && [ -d "$CORRIDA" ]; then
+  echo "" >&2
+  echo "── Resumen ──" >&2
+  "$PY" -I "$RAIZ/scripts/resumen_corrida.py" --corrida "$CORRIDA" || true
+  [ "$CODIGO" -ne 0 ] && echo "auditar-aqui: 'auditar all' terminó con código $CODIGO (ver run.json → fases)" >&2
+  echo "$CORRIDA"
+else
+  echo "auditar-aqui: 'auditar all' terminó con código $CODIGO sin carpeta de corrida" >&2
+fi
+exit "$CODIGO"

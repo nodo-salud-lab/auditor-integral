@@ -1,0 +1,155 @@
+# PROPUESTA de config/pesos.toml (2026-11-18). NO está activa: la adopta el investigador.
+# Evidencia y discusión: investigacion/11-pesos-evidencia.md
+# Compatibilidad: mantiene las claves que lee el score.py actual ([severidad] con valores numéricos
+# por severidad, [multiplicador_contextual], [puntaje_global], [iua.*]). Las secciones nuevas
+# ([rating_dominio], [iua.accesibilidad_lighthouse], [iua.componentes_alternativa_iguales],
+# [severidad.alternativa_*]) las ignora el código actual (score.py filtra lo no numérico).
+# Convención: origen = "plataforma" (valor copiado de una fuente publicada y verificada)
+#             origen = "propuesta"  (ESTIMACIÓN; sin fuente; decide el investigador)
+# El nivel N0-N5 lo decide gates.py; estos pesos son informativos.
+
+[severidad]
+# Opción A (propuesta por defecto): OpenSSF Scorecard, pesos por nivel de riesgo.
+# Código: weights := map[string]float64{"Critical": 10, "High": 7.5, "Medium": 5, "Low": 2.5}
+critica = 10
+alta = 7.5
+media = 5
+baja = 2.5
+# info = 0: Sonar MQR ("A = 0 or more info issues") y Lighthouse (reglas experimentales con peso 0).
+info = 0
+origen = "plataforma"
+fuente = "https://github.com/ossf/scorecard/blob/e78ecbbade8f79491d71125c14409065a69d6b4c/pkg/scorecard/scorecard_result.go (GetAggregateScore)"
+fuente_info = "https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/ ; https://github.com/GoogleChrome/lighthouse/blob/5d395351e8953c8e79ceea5246ed5b198b588d1d/core/config/default-config.js"
+nota = "La correspondencia crítica/alta/media/baja ↔ Critical/High/Medium/Low es nominal: NO VERIFICADO que las severidades del catálogo equivalgan a los niveles de riesgo de Scorecard."
+
+[severidad.alternativa_lighthouse_axe]
+# Opción B: pesos de Lighthouse para auditorías de accesibilidad según impacto axe (reglas WCAG A/AA).
+critica = 10
+alta = 7
+media = 3
+baja = 1
+info = 0
+origen = "plataforma"
+fuente = "https://github.com/GoogleChrome/lighthouse/blob/5d395351e8953c8e79ceea5246ed5b198b588d1d/core/config/default-config.js (tabla Impact/Weight) ; https://developer.chrome.com/docs/lighthouse/accessibility/scoring"
+
+[severidad.anterior_sin_fuente]
+# Valores vigentes en config/pesos.toml antes de esta propuesta (PLAN_MAESTRO §4.4). Sin fuente.
+critica = 10
+alta = 5
+media = 2
+baja = 1
+info = 0
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §4.4 (ESTIMACIÓN)"
+
+[multiplicador_contextual]
+# x1,5 a controles SEG y DAT si hay salud o pagos.
+# Precedente: CVSS v3.1 §7.4 tabla 16, Security Requirements High (H) = 1.5 (Medium = 1, Low = 0.5),
+# para "the importance of the affected IT asset". CVSS v4.0 ya no usa multiplicadores (MacroVectors);
+# el precedente es histórico. OWASP RRM respalda ponderar por impacto de negocio.
+factor = 1.5
+dominios = ["SEG", "DAT"]
+banderas = ["salud", "pagos"]
+origen = "plataforma"
+fuente = "https://www.first.org/cvss/v3.1/specification-document (§7.4, CR/IR/AR High = 1.5) ; https://community.owasp.org/OWASP_Risk_Rating_Methodology (weighted average por negocio)"
+nota = "La elección de SEG/DAT y de las banderas salud/pagos es ESTIMACIÓN (propuesta); solo el valor 1,5 tiene precedente."
+
+[puntaje_global]
+# G1 (propuesta): agregación agrupada estilo Scorecard sobre TODOS los controles evaluados:
+#   Global = 100 * Σ w(c)·m(c)·[pass] / Σ w(c)·m(c); m = factor si dominio ∈ dominios y bandera activa.
+#   no_evaluado se excluye de numerador y denominador (igual que los checks inconclusos de Scorecard).
+# Alternativas: "media_simple_dominios" (G2, pesos iguales entre dominios; ESTIMACIÓN, OWASP RRM igualdad
+#   por defecto) y "media de dominios ponderada por controles aplicables" (G3, actual, sin fuente).
+# REQUIERE CAMBIO EN score.py para G1/G2 (hoy implementa G3 sin leer este campo).
+metodo = "agrupado_scorecard"
+metodos_alternativos = ["media_simple_dominios", "media de dominios ponderada por controles aplicables"]
+origen = "plataforma"
+fuente = "https://github.com/ossf/scorecard/blob/e78ecbbade8f79491d71125c14409065a69d6b4c/pkg/scorecard/scorecard_result.go (score/total; inconclusos excluidos)"
+nota = "No existe plataforma que publique pesos entre dominios equivalentes a SEG/DAT/COD/UX/INF/ESC/OPS; con G1 el peso de cada dominio emerge de sus controles evaluados."
+
+[rating_dominio]
+# NUEVO (no compensatorio): letra por peor fail abierto, estilo SonarQube MQR
+# (A = 0 o más info; B >= 1 low; C >= 1 medium; D >= 1 high; E >= 1 blocker).
+# Se muestra junto al puntaje; no reemplaza al nivel N0-N5.
+ninguno = "A"
+baja = "B"
+media = "C"
+alta = "D"
+critica = "E"
+origen = "plataforma"
+fuente = "https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/ (Security/Reliability rating, MQR)"
+nota = "Mapear crítica del auditor a 'blocker' de Sonar es ESTIMACIÓN (Sonar tiene blocker y high separados). Requiere implementación en score.py."
+
+[iua]
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §5.1; evidencia en investigacion/11-pesos-evidencia.md §4"
+nota = "Ninguna plataforma combina accesibilidad, rendimiento, teclado, etc. en un índice único (Lighthouse reporta categorías por separado). Reportar siempre los 6 subpuntajes."
+
+[iua.componentes]
+# Pesos vigentes (ESTIMACIÓN, sin fuente). Se mantienen para compatibilidad.
+accesibilidad = 25
+teclado = 15
+responsive_tactil = 15
+robustez_estados = 15
+rendimiento = 15
+limpieza = 15
+# origen = "propuesta" · fuente = PLAN_MAESTRO §5.1 (ESTIMACIÓN). Sin claves de texto aquí para no romper sumas de pesos.
+
+[iua.componentes_alternativa_iguales]
+# Alternativa neutral: pesos iguales (criterio OWASP RRM de igualdad por defecto, sin evidencia específica).
+accesibilidad = 1
+teclado = 1
+responsive_tactil = 1
+robustez_estados = 1
+rendimiento = 1
+limpieza = 1
+# origen = "propuesta" · fuente = https://community.owasp.org/OWASP_Risk_Rating_Methodology (igualdad por defecto); ESTIMACIÓN
+
+[iua.accesibilidad]
+# Fórmula vigente (sin fuente): 100 - 25*critical - 10*serious - 3*moderate, piso 0. Se conserva por compatibilidad.
+base = 100
+penalizacion_critical = 25
+penalizacion_serious = 10
+penalizacion_moderate = 3
+piso = 0
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §5.1 (ESTIMACIÓN)"
+
+[iua.accesibilidad_lighthouse]
+# PROPUESTA: Acc = 100 * Σ w(r)·[r pasa] / Σ w(r) sobre reglas axe en passes ∪ violations
+# (excluye incomplete e inapplicable). Pass/fail por regla, sin crédito parcial (como Lighthouse).
+# Peso por impacto si la regla tiene etiqueta WCAG A/AA; reglas solo best-practice: minor = 0;
+# reglas experimentales = 0.
+# Verificación 2026-11-18: el commit 5d39535 es de main (posterior a v13.6.0); en la release v13.6.0
+# (commit edc407d72179bbc4d4de8a40ef0311ca87dff89c) los pesos son idénticos. Peso minor WCAG = 1 sí se usa
+# (aria-deprecated-role). Lighthouse además pesa 1 tres auditorías "Informational" fuera de la tabla.
+metodo = "media_ponderada_reglas"
+peso_critical = 10
+peso_serious = 7
+peso_moderate = 3
+peso_minor_wcag = 1
+peso_minor_best_practice = 0
+peso_experimental = 0
+origen = "plataforma"
+fuente = "https://github.com/GoogleChrome/lighthouse/blob/5d395351e8953c8e79ceea5246ed5b198b588d1d/core/config/default-config.js (tabla Impact/Weight) ; https://developer.chrome.com/docs/lighthouse/accessibility/scoring"
+nota = "Requiere implementación en iua.py (NO VERIFICADO que iua.py exista al 2026-11-18)."
+
+[iua.rendimiento]
+# Se usa el puntaje Performance de Lighthouse (mediana de 3), que ya trae pesos internos:
+# FCP 10, SI 10, LCP 25, TBT 30, CLS 25 (INP 0 en laboratorio).
+peso_fcp = 10
+peso_si = 10
+peso_lcp = 25
+peso_tbt = 30
+peso_cls = 25
+origen = "plataforma"
+fuente = "https://developer.chrome.com/docs/lighthouse/performance/performance-scoring ; https://github.com/GoogleChrome/lighthouse/blob/5d395351e8953c8e79ceea5246ed5b198b588d1d/core/config/default-config.js"
+nota = "Informativo: lo calcula Lighthouse; iua.py no debe recalcularlo."
+
+[iua.limpieza]
+# Forma sustractiva (base 100 - penalizaciones, piso 0) análoga a Mozilla HTTP Observatory;
+# el valor 20 por tipo NO tiene fuente.
+base = 100
+penalizacion_por_tipo = 20
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §5.1 (ESTIMACIÓN); forma análoga: https://github.com/mozilla/http-observatory/blob/main/httpobs/docs/scoring.md"

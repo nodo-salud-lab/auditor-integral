@@ -1,0 +1,18 @@
+// Utilidades de formato (sin efectos laterales)
+
+export function formatearPrecio(monto) {
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(monto)
+}
+
+export function leerPreferencias(texto) {
+  try {
+    return JSON.parse(texto)
+  } catch (error) {
+    console.warn('Preferencias inválidas, se usan las de fábrica', error)
+    return { tema: 'claro' }
+  }
+}
+
+export function normalizarRut(rut) {
+  return String(rut).replace(/[^0-9kK]/g, '').toUpperCase()
+}

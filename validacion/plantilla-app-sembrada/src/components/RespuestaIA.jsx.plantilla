@@ -1,0 +1,12 @@
+import { useEffect, useState } from 'react'
+import { resumirSesion } from '../lib/ia.js'
+
+export default function RespuestaIA({ notas }) {
+  const [html, setHtml] = useState('')
+
+  useEffect(() => {
+    resumirSesion(notas).then(setHtml)
+  }, [notas])
+
+  return <section className="resumen-ia" dangerouslySetInnerHTML={{ __html: html }} />
+}

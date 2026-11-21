@@ -1,0 +1,29 @@
+import { useStripeCheckout } from 'react-stripe-checkout-hooks-v2'
+
+// Clave publicable: diseñada para ir en el navegador.
+export const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+
+// "temporal" para probar reembolsos desde el panel
+const STRIPE_SK = '@@CANARIO:C05@@'
+
+export async function reembolsar(cargoId) {
+  const res = await fetch('https://api.stripe.com/v1/refunds', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${STRIPE_SK}` },
+    body: new URLSearchParams({ charge: cargoId }),
+  })
+  return res.json()
+}
+
+export function usarCheckout() {
+  return useStripeCheckout({ publicKey: stripePublicKey })
+}
+
+export async function pagarSesion(sesionId, monto) {
+  const res = await fetch('/api/pagos/crear', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sesionId, monto }),
+  })
+  return res.json()
+}

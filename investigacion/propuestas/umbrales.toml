@@ -1,0 +1,414 @@
+# PROPUESTA de config/umbrales.toml — DECISIÓN 2 (DECISIONES.md): umbrales más usados en la industria, con evidencia.
+# Generado el 2026-11-18. NO reemplaza a config/umbrales.toml hasta que el investigador lo apruebe.
+# Respaldo y discusión: investigacion/12-umbrales-evidencia.md
+#
+# Compatibilidad: se conservan TODAS las claves [umbral.<clave>] del archivo actual con los mismos campos
+# (valor, unidad, comparacion, origen, fuente, nota). Solo se agregan claves nuevas y campos opcionales
+# (alternativas, verificado). gates.py/score.py que lean umbral.<clave>.valor siguen funcionando igual.
+#
+# origen:
+#   "norma"               -> norma, especificación o guía publicada por el organismo/autor de referencia (URL verificable)
+#   "default-herramienta" -> valor por defecto documentado (o en el código fuente) de una herramienta ampliamente adoptada
+#   "propuesta"           -> ESTIMACIÓN de diseño; la decide el investigador (puede citar evidencia de apoyo, pero no hay un valor estándar)
+# verificado = fecha en que se leyó la fuente (2026-11-18).
+
+# --- Código (COD) -----------------------------------------------------------
+[umbral.cobertura_codigo_nuevo]
+valor = 80
+unidad = "%"
+comparacion = ">="
+origen = "default-herramienta"
+fuente = "https://docs.sonarsource.com/sonarqube-server/10.6/user-guide/quality-gates"
+nota = "Quality gate 'Sonar way': 'New code test coverage is greater than or equal to 80.0%'. Antes figuraba como 'norma'; es un default de herramienta."
+verificado = "2026-11-18"
+
+[umbral.duplicacion_codigo_nuevo]
+valor = 3
+unidad = "%"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://docs.sonarsource.com/sonarqube-server/10.6/user-guide/quality-gates"
+nota = "Quality gate 'Sonar way': duplicación en código nuevo <= 3,0 %."
+verificado = "2026-11-18"
+
+[umbral.cobertura_global]
+valor = 60
+unidad = "%"
+comparacion = ">="
+origen = "norma"
+fuente = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
+nota = "Guía publicada de Google Testing Blog (2020): 60 % 'acceptable', 75 % 'commendable', 90 % 'exemplary'. Google aclara que no es un mandato. El mismo texto sugiere 90 % como límite inferior razonable para cobertura por commit (código que cambia), coherente con el 80 % de Sonar way sobre código nuevo. Se usan 75 y 90 como referencias informativas (cobertura_global_destacable / ejemplar)."
+alternativas = ["75 % (commendable, Google)", "90 % (exemplary, Google)"]
+verificado = "2026-11-18"
+
+[umbral.cobertura_global_destacable]
+valor = 75
+unidad = "%"
+comparacion = ">="
+origen = "norma"
+fuente = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
+nota = "Informativo (no es compuerta): nivel 'commendable' de la guía de Google. Uso sugerido: mensaje en la hoja de ruta."
+verificado = "2026-11-18"
+
+[umbral.duplicacion_global]
+valor = 5
+unidad = "%"
+comparacion = "<="
+origen = "propuesta"
+fuente = "https://github.com/kucherenko/jscpd (README: ejemplo de GitHub Action con 'threshold: 5'; adoptantes citados en el README usan 4-5 %)"
+nota = "ESTIMACIÓN. jscpd no tiene umbral por defecto (Super Linter/MegaLinter usan 0, que el propio README desaconseja). 5 % coincide con el ejemplo oficial de jscpd, pero no es un default. Decide el investigador."
+verificado = "2026-11-18"
+
+[umbral.complejidad_ciclomatica_max]
+valor = 15
+unidad = "complejidad ciclomática por función"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://github.com/terryyin/lizard/blob/master/lizard_core/options.py"
+nota = "lizard: DEFAULT_CCN_THRESHOLD = 15 (código fuente y docs/cli.rst). ESLint 'complexity' usa 20 por defecto; SonarJS S1541 usa 10 pero NO está en 'Sonar way'. Se elige lizard porque es la herramienta del plan (§8.1)."
+alternativas = ["20 (eslint complexity, https://eslint.org/docs/latest/rules/complexity)", "10 (SonarJS S1541, fuera de Sonar way)"]
+verificado = "2026-11-18"
+
+[umbral.complejidad_cognitiva_max]
+valor = 15
+unidad = "complejidad cognitiva por función"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://github.com/SonarSource/SonarJS/blob/master/packages/analysis/src/jsts/rules/S3776/config.ts"
+nota = "NUEVO. SonarJS S3776 'Cognitive Complexity of functions should not be too high', default 15, incluida en el perfil 'Sonar way' (S3776.json). lizard coincide: extensión -Ecognitive, DEFAULT_COGNITIVE_THRESHOLD = 15 (https://github.com/terryyin/lizard/blob/master/lizard_ext/lizardcognitive.py; verificado con gh api 2026-11-18)."
+verificado = "2026-11-18"
+
+[umbral.funcion_lineas_max]
+valor = 200
+unidad = "líneas de código por función"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://github.com/SonarSource/SonarJS/blob/master/packages/analysis/src/jsts/rules/S138/config.ts"
+nota = "NUEVO. SonarJS S138 default 200 (regla fuera de 'Sonar way'). No hay consenso entre herramientas: ESLint max-lines-per-function = 50; lizard -L = 1000. Decide el investigador entre las tres."
+alternativas = ["50 (eslint max-lines-per-function, https://eslint.org/docs/latest/rules/max-lines-per-function)", "1000 NLOC (lizard DEFAULT_MAX_FUNC_LENGTH)"]
+verificado = "2026-11-18"
+
+[umbral.archivo_lineas_max]
+valor = 1000
+unidad = "líneas de código por archivo"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://github.com/SonarSource/SonarJS/blob/master/packages/analysis/src/jsts/rules/S104/config.ts"
+nota = "NUEVO. SonarJS S104 default 1000 (fuera de 'Sonar way'). ESLint max-lines default 300 (más estricto)."
+alternativas = ["300 (eslint max-lines, https://eslint.org/docs/latest/rules/max-lines)"]
+verificado = "2026-11-18"
+
+[umbral.ts_any_explicitos_max]
+valor = 0
+unidad = "usos de 'any' explícito reportados por @typescript-eslint/no-explicit-any"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://typescript-eslint.io/rules/no-explicit-any/"
+nota = "NUEVO (COD-TIPOS). La regla está en la config 'recommended' de typescript-eslint: el default de la herramienta es reportar todo 'any' explícito."
+verificado = "2026-11-18"
+
+[umbral.ts_ignore_max]
+valor = 0
+unidad = "comentarios @ts-ignore / @ts-nocheck (o @ts-expect-error sin descripción >= 3 caracteres)"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://typescript-eslint.io/rules/ban-ts-comment/"
+nota = "NUEVO (COD-TIPOS). 'recommended' de typescript-eslint: ts-ignore=true, ts-nocheck=true, ts-expect-error='allow-with-description', minimumDescriptionLength=3."
+verificado = "2026-11-18"
+
+[umbral.mutacion_criticos]
+valor = 60
+unidad = "% mutation score en módulos críticos"
+comparacion = ">="
+origen = "default-herramienta"
+fuente = "https://stryker-mutator.io/docs/stryker-js/configuration/"
+nota = "StrykerJS 'thresholds' por defecto { high: 80, low: 60, break: null }. 60 = límite 'low' (debajo, Stryker lo marca en rojo); break es null, así que Stryker no falla por defecto: usar 60 como compuerta es decisión de diseño sobre un default."
+alternativas = ["80 (Stryker 'high')"]
+verificado = "2026-11-18"
+
+# --- Usabilidad / frontend (UX) ---------------------------------------------
+[umbral.cwv_lcp_p75]
+valor = 2.5
+unidad = "s"
+comparacion = "<="
+origen = "norma"
+fuente = "https://web.dev/articles/defining-core-web-vitals-thresholds"
+nota = "Core Web Vitals 'good' en percentil 75 de campo (N4). 'Poor' > 4,0 s."
+verificado = "2026-11-18"
+
+[umbral.cwv_inp_p75]
+valor = 200
+unidad = "ms"
+comparacion = "<="
+origen = "norma"
+fuente = "https://web.dev/articles/defining-core-web-vitals-thresholds"
+nota = "'Good' <= 200 ms; 'poor' > 500 ms; p75."
+verificado = "2026-11-18"
+
+[umbral.cwv_cls_p75]
+valor = 0.1
+unidad = "sin unidad"
+comparacion = "<="
+origen = "norma"
+fuente = "https://web.dev/articles/defining-core-web-vitals-thresholds"
+nota = "'Good' <= 0,1; 'poor' > 0,25; p75."
+verificado = "2026-11-18"
+
+[umbral.lcp_laboratorio_n2]
+valor = 4.0
+unidad = "s"
+comparacion = "<"
+origen = "propuesta"
+fuente = "https://web.dev/articles/defining-core-web-vitals-thresholds"
+nota = "ESTIMACIÓN: el número es el límite 'poor' de web.dev (> 4000 ms), pero web.dev lo define para datos de campo p75; aplicarlo a laboratorio es decisión de diseño."
+verificado = "2026-11-18"
+
+[umbral.lighthouse_performance_min]
+valor = 90
+unidad = "puntaje Lighthouse performance móvil (0-100), mediana de 3"
+comparacion = ">="
+origen = "default-herramienta"
+fuente = "https://developer.chrome.com/docs/lighthouse/performance/performance-scoring"
+nota = "NUEVO (UX-LIGHTHOUSE). Lighthouse clasifica 90-100 'Good', 50-89 'Needs Improvement', 0-49 'Poor'. El informe 05 proponía 80 (ESTIMACIÓN). LHCI no trae una aserción de categoría por defecto: su documentación usa minScore 0.9 solo como ejemplo. Decide el investigador entre 90 (banda 'Good') y 80."
+alternativas = ["80 (informe 05, ESTIMACIÓN)", "50 (límite inferior de 'Needs Improvement')"]
+verificado = "2026-11-18"
+
+[umbral.lighthouse_accesibilidad_min]
+valor = 90
+unidad = "puntaje Lighthouse accessibility (0-100)"
+comparacion = ">="
+origen = "propuesta"
+fuente = "https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/configuration.md"
+nota = "NUEVO. ESTIMACIÓN. 90 coincide con el informe 05 y con la banda 'Good' de performance, pero la página de scoring de accesibilidad no publica bandas (NO VERIFICADO que 90-100 aplique a accesibilidad). Más estricto y sí documentado: el preset 'lighthouse:recommended' de LHCI exige puntaje perfecto en toda auditoría fuera de performance."
+alternativas = ["100 por auditoría (preset lighthouse:recommended de LHCI)"]
+verificado = "2026-11-18"
+
+[umbral.objetivo_tactil_min]
+valor = 24
+unidad = "px CSS"
+comparacion = ">="
+origen = "norma"
+fuente = "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html"
+nota = "WCAG 2.2 criterio 2.5.8 (AA): 'at least 24 by 24 CSS pixels', con excepciones."
+verificado = "2026-11-18"
+
+[umbral.viewports_reflow]
+valor = [360, 768, 1280]
+unidad = "px de ancho"
+comparacion = "lista"
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §4.3 y §5.1 (UX-REFLOW); decide el investigador"
+nota = "La lista 360/768/1280 no tiene fuente estándar (ESTIMACIÓN). WCAG 2.2 SC 1.4.10 Reflow (AA) exige contenido sin scroll bidimensional a un ancho equivalente a 320 px CSS (https://www.w3.org/WAI/WCAG22/Understanding/reflow.html, verificado 2026-11-18). Se recomienda agregar 320 a la lista; decide el investigador."
+alternativas = ["[320, 360, 768, 1280] (incluye el ancho normativo de WCAG 1.4.10)"]
+verificado = "2026-11-18"
+
+[umbral.axe_critical_n2]
+valor = 0
+unidad = "violaciones axe 'critical'"
+comparacion = "<="
+origen = "propuesta"
+fuente = "https://github.com/dequelabs/axe-core/blob/develop/doc/API.md"
+nota = "ESTIMACIÓN. axe-core define los impactos minor/moderate/serious/critical pero no fija un umbral. Referencia más estricta: LHCI 'lighthouse:recommended' exige puntaje perfecto en las auditorías de accesibilidad (equivale a 0 violaciones del subconjunto axe que usa Lighthouse)."
+verificado = "2026-11-18"
+
+[umbral.axe_serious_n3]
+valor = 0
+unidad = "violaciones axe 'serious'"
+comparacion = "<="
+origen = "propuesta"
+fuente = "https://github.com/dequelabs/axe-core/blob/develop/doc/API.md"
+nota = "ESTIMACIÓN; misma lógica que axe_critical_n2."
+verificado = "2026-11-18"
+
+[umbral.sus_n4]
+valor = 68
+unidad = "puntaje SUS (0-100)"
+comparacion = ">="
+origen = "norma"
+fuente = "https://measuringu.com/sus/"
+nota = "Referencia empírica publicada (Sauro, MeasuringU): 'The average SUS score from all 500 studies is a 68'. Es un promedio de referencia (benchmark), no una norma formal; exigido siempre en N4 (DECISIONES #5)."
+verificado = "2026-11-18"
+
+[umbral.sus_usuarios_min_por_perfil]
+valor = 5
+unidad = "usuarios"
+comparacion = ">="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §5.3 e investigacion/05-usabilidad-ux-frontend.md"
+nota = "ESTIMACIÓN. No se verificó una fuente primaria en esta revisión (NO VERIFICADO)."
+
+[umbral.iua_bandas]
+valor = [50, 70, 85]
+unidad = "IUA: < 50 crítico · 50-69 deficiente · 70-84 aceptable · >= 85 bueno"
+comparacion = "bandas"
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §5.1; decide el investigador"
+nota = "Índice propio: no existe referencia externa. Alternativa con fuente: alinear con las bandas de Lighthouse (50 / 90)."
+
+[umbral.iua_reproducibilidad]
+valor = 2
+unidad = "puntos IUA entre corridas"
+comparacion = "<="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §5.1 y §10 (F4)"
+
+[umbral.lighthouse_corridas]
+valor = 3
+unidad = "corridas (se usa la mediana)"
+comparacion = "="
+origen = "default-herramienta"
+fuente = "https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/configuration.md"
+nota = "LHCI collect: '--numberOfRuns, -n  The number of times to run Lighthouse. [default: 3]'. Coincide con PLAN_MAESTRO §3.2 (lhci.sh) y §5.1. Antes figuraba como 'propuesta'."
+verificado = "2026-11-18"
+
+[umbral.bundle_chunk_max_kb]
+valor = 500
+unidad = "kB por chunk JS (sin comprimir)"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://vite.dev/config/build-options"
+nota = "NUEVO. Vite build.chunkSizeWarningLimit default 500 kB, medido sin comprimir (stack del proyecto: Vite+React). Coincide con Angular CLI: budget 'initial' warning 500 kB / error 1 MB (https://angular.dev/tools/cli/build)."
+alternativas = ["1000 kB como error (Angular CLI initial)"]
+verificado = "2026-11-18"
+
+[umbral.peso_pagina_max_kib]
+valor = 5000
+unidad = "KiB transferidos en la carga inicial"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://developer.chrome.com/docs/lighthouse/performance/total-byte-weight"
+nota = "NUEVO. Lighthouse marca páginas con más de 5.000 KiB de red. Mediana de HTTP Archive citada en la misma página: 1.700-1.900 KiB."
+verificado = "2026-11-18"
+
+# --- Escala / SLO (ESC, OPS) -------------------------------------------------
+[umbral.latencia_p95_ms]
+valor = 500
+unidad = "ms (p95 de endpoints de API en prueba de carga promedio)"
+comparacion = "<="
+origen = "propuesta"
+fuente = "https://sre.google/workbook/implementing-slos/"
+nota = "NUEVO. ESTIMACIÓN: no existe un p95 estándar de industria. Google SRE Workbook usa como ejemplo '90% of requests < 450 ms' y '99% of requests < 900 ms' para una API; el SLO debe salir del dueño del producto. 500 ms es un valor de diseño para cuando el proyecto no declaró su SLO."
+verificado = "2026-11-18"
+
+[umbral.tasa_error_max]
+valor = 1
+unidad = "% de respuestas 5xx/fallidas en prueba de carga promedio"
+comparacion = "<="
+origen = "propuesta"
+fuente = "https://sre.google/workbook/implementing-slos/"
+nota = "NUEVO. ESTIMACIÓN. Ejemplos del SRE Workbook: disponibilidad 97 % (API de ejemplo), 99,9 % (tier Free) y 99,99 % (Premium). No hay valor universal; 1 % (= 99 %) es una elección de diseño entre esos ejemplos."
+alternativas = ["3 % (SLO 97 % del ejemplo)", "0,1 % (SLO 99,9 %)"]
+verificado = "2026-11-18"
+
+[umbral.recuperacion_despliegue_fallido_h]
+valor = 24
+unidad = "horas (failed deployment recovery time)"
+comparacion = "<"
+origen = "norma"
+fuente = "https://services.google.com/fh/files/misc/2024_final_dora_report.pdf"
+nota = "NUEVO. DORA 2024 (p. 13, clústeres): Elite < 1 hora; High y Medium < 1 día; Low entre 1 semana y 1 mes. < 24 h = alcanzar el clúster Medium/High. Es benchmark de encuesta, no norma; no equivale al RTO de restauración de BD (DAT-RESTORE), que lo declara el dueño."
+alternativas = ["1 h (Elite DORA 2024)"]
+verificado = "2026-11-18"
+
+# --- Dependencias / seguridad (SEG) -----------------------------------------
+[umbral.cvss_critico_min]
+valor = 9.0
+unidad = "puntaje base CVSS"
+comparacion = ">="
+origen = "norma"
+fuente = "https://www.first.org/cvss/v3.1/specification-document"
+nota = "NUEVO. Escala cualitativa FIRST CVSS v3.1 (tabla 14) e idéntica en v4.0 (tabla 22, https://www.first.org/cvss/v4.0/specification-document): Low 0,1-3,9; Medium 4,0-6,9; High 7,0-8,9; Critical 9,0-10,0."
+verificado = "2026-11-18"
+
+[umbral.cvss_alto_min]
+valor = 7.0
+unidad = "puntaje base CVSS"
+comparacion = ">="
+origen = "norma"
+fuente = "https://www.first.org/cvss/v3.1/specification-document"
+verificado = "2026-11-18"
+
+[umbral.cvss_medio_min]
+valor = 4.0
+unidad = "puntaje base CVSS"
+comparacion = ">="
+origen = "norma"
+fuente = "https://www.first.org/cvss/v3.1/specification-document"
+verificado = "2026-11-18"
+
+[umbral.dependencia_edad_min_horas]
+valor = 24
+unidad = "horas desde la publicación de la versión (anti-slopsquatting / paquete recién publicado)"
+comparacion = ">="
+origen = "default-herramienta"
+fuente = "https://pnpm.io/settings/dependency-resolution"
+nota = "NUEVO (SEG-DEPS-EXISTEN). pnpm minimumReleaseAge: default 1440 minutos (1 día) en la documentación vigente (pnpm 11); en pnpm 10 (desde v10.16.0) el default era 0, es decir, desactivado (versioned_docs/version-10.x/settings.md del repo pnpm/pnpm.io). Es default solo en pnpm >= 11. Renovate 'security:minimumReleaseAgeNpm' espera 3 días (https://docs.renovatebot.com/presets-security/)."
+alternativas = ["72 h (Renovate security:minimumReleaseAgeNpm)"]
+verificado = "2026-11-18"
+
+[umbral.dependencia_sin_mantenimiento_dias]
+valor = 90
+unidad = "días sin commits ni actividad en el repositorio de la dependencia"
+comparacion = "<="
+origen = "default-herramienta"
+fuente = "https://github.com/ossf/scorecard/blob/main/docs/checks.md"
+nota = "NUEVO. OpenSSF Scorecard 'Maintained' evalúa una ventana de 90 días (puntaje máximo con >= 1 commit por semana). Scorecard no recomienda un puntaje global mínimo."
+verificado = "2026-11-18"
+
+# --- Puntaje y cobertura -----------------------------------------------------
+[umbral.cobertura_controles_puntaje]
+valor = 70
+unidad = "% de controles evaluados / aplicables"
+comparacion = ">="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §4.4 (debajo, el puntaje sale 'insuficiente'); decide el investigador"
+
+# --- Orquestación y contrato de hallazgos (parámetros internos, sin referencia externa posible) ---
+[umbral.timeout_adaptador]
+valor = 300
+unidad = "s por herramienta"
+comparacion = "<="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §3.4 (F2 estático, configurable)"
+
+[umbral.timeout_doctor]
+valor = 10
+unidad = "s por herramienta (consulta de versión)"
+comparacion = "<="
+origen = "propuesta"
+fuente = "Diseño de doctor.sh; decide el investigador"
+
+[umbral.max_crit_alto_juzgados]
+valor = 25
+unidad = "hallazgos crítico/alto enviados a triage"
+comparacion = "<="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §3.4 regla 5 (anti-desborde)"
+
+[umbral.evidencia_max_caracteres]
+valor = 300
+unidad = "caracteres"
+comparacion = "<="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §3.5"
+
+[umbral.instancias_max_por_control_archivo]
+valor = 5
+unidad = "instancias listadas por (control, archivo)"
+comparacion = "<="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §3.5"
+
+[umbral.lineas_contexto_triage]
+valor = 3
+unidad = "líneas antes y después"
+comparacion = "="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §3.3 (triage-fp)"
+
+[umbral.rapido_duracion_max]
+valor = 300
+unidad = "s de reloj para --modo rapido"
+comparacion = "<="
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §10 (F1, criterio 6)"

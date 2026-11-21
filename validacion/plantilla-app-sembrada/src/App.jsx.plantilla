@@ -1,0 +1,29 @@
+import { Routes, Route, Link } from 'react-router-dom'
+import RutaPrivada from './components/RutaPrivada.jsx'
+import Login from './pages/Login.jsx'
+import Admin from './pages/Admin.jsx'
+import Perfil from './pages/Perfil.jsx'
+import Agenda from './pages/Agenda.jsx'
+
+export default function App() {
+  return (
+    <div className="app">
+      <nav>
+        <Link to="/">Agenda</Link> · <Link to="/perfil">Mi perfil</Link> · <Link to="/admin">Admin</Link>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Agenda />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/perfil" element={<Perfil />} />
+        <Route
+          path="/admin"
+          element={
+            <RutaPrivada>
+              <Admin />
+            </RutaPrivada>
+          }
+        />
+      </Routes>
+    </div>
+  )
+}

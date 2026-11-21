@@ -1,0 +1,115 @@
+# Presupuesto de tokens LLM por fase y modo (PLAN_MAESTRO §9).
+# ESTIMACIÓN: metas de diseño sin fuente externa; se miden con medir_tokens.py (F4/F6) y se ajustan aquí.
+# "—" del plan (fase que no corre en ese modo) se registra como 0.
+origen = "propuesta"
+fuente = "PLAN_MAESTRO §9"
+
+[fase.f0_preparar]
+rapido = 0
+estandar = 0
+profundo = 0
+
+[fase.f1_perfil_flujograma]
+rapido = 1000
+estandar = 5000
+profundo = 8000
+
+[fase.f2_3_escaneos]
+rapido = 0
+estandar = 0
+profundo = 0
+
+[fase.f4a_autorizacion]
+rapido = 0
+estandar = 12000
+profundo = 20000
+
+[fase.f4b_arquitectura_stride]
+rapido = 0
+estandar = 8000
+profundo = 15000
+
+[fase.f4c_ux]
+rapido = 0
+estandar = 8000
+profundo = 12000
+
+[fase.f4d_triage]
+rapido = 6000
+estandar = 6000
+profundo = 12000
+
+[fase.f5_compuertas]
+rapido = 0
+estandar = 0
+profundo = 0
+
+[fase.f6_informe]
+rapido = 2000
+estandar = 5000
+profundo = 6000
+
+[fase.orquestacion]
+rapido = 2000
+estandar = 5000
+profundo = 6000
+
+[total.rapido]
+meta = 11000
+tope_meta = 15000
+techo_duro = 25000
+
+[total.estandar]
+meta = 49000
+tope_meta = 60000
+techo_duro = 100000
+
+[total.profundo]
+meta = 79000
+tope_meta = 130000
+techo_duro = 130000
+
+[auditar_diff]
+estandar = 15000
+
+[mecanismos]
+# Si una fase excede su meta en más de este porcentaje, se trunca evidencia y se informa como limitación.
+exceso_fase_pct = 50
+# TOPE DURO de cada digest (scripts/digest.py): digest/{autorizacion,arquitectura,triage,ux}.json nunca lo superan.
+# Si falta la clave, digest.py usa 4000.
+digest_tope_por_juicio = 4000
+# Estimación de tokens = ceil(caracteres del JSON escrito / caracteres_por_token). ESTIMACIÓN sin calibrar contra el
+# tokenizador; se mide el consumo real con scripts/medir_tokens.py y se ajusta aquí. Si falta la clave, digest.py usa
+# 4 (≈ 4 caracteres por token en texto inglés); 3,5 es más conservador (estima más tokens → digest más chico).
+caracteres_por_token = 3.5
+subagente_salida_max = 1500
+
+[triage]
+# Cuota del digest de triage (fracción de digest_tope_por_juicio) reservada para candidatos a falso positivo de
+# cualquier severidad (scripts/digest.py). ESTIMACIÓN: 0,4 es un default de diseño sin medir; motivo: en la
+# comparación de brazos (investigacion/17) el triage no vio ninguno de los 25 FP del brazo C. Fuera de (0, 1) se ignora.
+cuota_fp = 0.4
+# Historial de FP confirmados (validacion/brazo-c-kine-us/confirmados-revision-libre.toml, INFORME-KINE-US.md):
+# generic-api-key en bundles minificados (SEG-01..03), SEG-ENV-EJEMPLO (SEG-09) y SEG-ERRORES (SEG-10..15).
+reglas_historial_fp = ["gitleaks:generic-api-key"]
+controles_historial_fp = ["SEG-ENV-EJEMPLO", "SEG-ERRORES"]
+
+[jueces]
+# Jueces LLM que /auditar lanza por modo (digest/indice.json → jueces_modo y, por digest, lanzar). ESTIMACIÓN hasta
+# medir con scripts/medir_tokens.py. Motivo: cada juez procesa ~75-80 k tokens nuevos aunque su digest esté vacío
+# (investigacion/17 §2.6: 3 jueces de kine us = 225 055; A-c1 = 76 733-81 136 por juez). Un juez nunca se lanza si
+# su digest trae omitir_juez = true. Lo no lanzado queda no_evaluado.
+origen = "ESTIMACIÓN"
+
+[jueces.rapido]
+lanzar = ["triage"]
+condicionales = []
+
+[jueces.estandar]
+lanzar = ["triage", "autorizacion"]
+# arquitectura solo si hay flujograma confirmado o hallazgos de arquitectura (si no, digest.py la marca omitir_juez)
+condicionales = ["arquitectura"]
+
+[jueces.profundo]
+lanzar = ["triage", "autorizacion", "arquitectura", "ux"]
+condicionales = []

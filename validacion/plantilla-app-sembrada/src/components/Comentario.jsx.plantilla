@@ -1,0 +1,13 @@
+import dayjs from 'dayjs'
+
+export default function Comentario({ comentario }) {
+  return (
+    <article className="comentario">
+      <header>
+        <strong>{comentario.autor}</strong>
+        <time>{dayjs(comentario.creado_en).format('DD-MM-YYYY')}</time>
+      </header>
+      <div className="cuerpo" dangerouslySetInnerHTML={{ __html: comentario.cuerpo }} />
+    </article>
+  )
+}

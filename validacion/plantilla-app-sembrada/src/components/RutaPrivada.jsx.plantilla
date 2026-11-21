@@ -1,0 +1,10 @@
+import { Navigate } from 'react-router-dom'
+
+// Protege las rutas de administración
+export default function RutaPrivada({ children }) {
+  const esAdmin = localStorage.getItem('esAdmin') === 'true'
+  if (!esAdmin) {
+    return <Navigate to="/login" replace />
+  }
+  return children
+}

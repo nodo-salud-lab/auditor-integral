@@ -1,0 +1,16 @@
+rules:
+  - id: findmany-sin-take
+    message: >-
+      findMany sin 'take': la consulta devuelve todas las filas de la tabla. Con datos reales se vuelve
+      lenta y cara (y puede tumbar el servidor). Paginar con take/skip o cursor.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      control: DAT-PAGINACION
+      cwe: "CWE-770: Allocation of Resources Without Limits or Throttling"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          - pattern: $DB.$MODELO.findMany()
+          - pattern: $DB.$MODELO.findMany({...})
+      - pattern-not: "$DB.$MODELO.findMany({..., take: $T, ...})"

@@ -1,0 +1,12 @@
+import { formatearPrecio } from '../utils/formato.js'
+
+export default function TarjetaProfesional({ profesional }) {
+  return (
+    <div className="tarjeta">
+      <h3>{profesional.nombre}</h3>
+      <p>{profesional.especialidad}</p>
+      <p>{profesional.biografia}</p>
+      <span>{formatearPrecio(profesional.precio_sesion)}</span>
+    </div>
+  )
+}

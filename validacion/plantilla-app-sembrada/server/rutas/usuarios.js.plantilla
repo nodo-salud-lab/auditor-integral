@@ -1,0 +1,19 @@
+import { Router } from 'express'
+import { pool } from '../db.js'
+import { requiereAuth } from '../middleware/auth.js'
+
+const router = Router()
+
+// Buscar usuario por correo (lo usa el formulario de recuperación)
+router.get('/buscar', async (req, res) => {
+  const resultado = await pool.query("SELECT id, nombre, email FROM usuarios WHERE email = '" + req.query.email + "'")
+  res.json(resultado.rows)
+})
+
+// Perfil del usuario autenticado
+router.get('/yo', requiereAuth, async (req, res) => {
+  const resultado = await pool.query('SELECT id, nombre, email FROM usuarios WHERE id = $1', [req.usuario.id])
+  res.json(resultado.rows[0] ?? null)
+})
+
+export default router

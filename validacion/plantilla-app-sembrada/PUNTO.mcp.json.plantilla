@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest", "--project-ref=tvhgdxhbtuycsolluhqj"],
+      "env": {
+        "SUPABASE_SERVICE_ROLE_KEY": "@@CANARIO:C01@@"
+      }
+    },
+    "documentacion": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@1.0.14"],
+      "env": {
+        "CONTEXT7_API_KEY": "@@CANARIO:C12@@"
+      }
+    }
+  }
+}

@@ -1,0 +1,248 @@
+# PROPUESTA (no aplicada) — Decisión 6: herramientas faltantes y fallbacks.
+# Fecha: 2026-11-18. Fuente: investigacion/13-fallbacks-herramientas.md.
+# Este archivo NO lo lee ningún script. Quien mantiene config/, catalogo/ y scripts/ decide si aplicarlo.
+# Todo valor de cobertura es ESTIMACIÓN (no medido); se reemplaza por lo medido en F6 (§5 del informe 13).
+
+# ---------------------------------------------------------------------------
+# A. Cambios a catalogo/controles.toml: añadir el fallback al final de `herramientas`
+#    (la primera disponible gana) y sus reglas a `mapea_reglas`.
+# ---------------------------------------------------------------------------
+[[cambio_catalogo]]
+control = "COD-DUPLICACION"
+herramientas_agregar = ["check_duplicacion"]
+mapea_reglas_agregar = ["check:duplicacion.*"]
+cobertura_fallback = "~65 % (ESTIMACIÓN)"
+
+[[cambio_catalogo]]
+control = "COD-COMPLEJIDAD"
+herramientas_agregar = ["check_complejidad"]
+herramientas_quitar = ["radon"]   # sin push desde 2024-10-20 (api.github.com/repos/rubik/radon)
+mapea_reglas_agregar = ["check:complejidad.*"]
+cobertura_fallback = "Python ~95 %, JS/TS ~70 % (ESTIMACIÓN)"
+
+[[cambio_catalogo]]
+control = "COD-CICLOS-MUERTO"
+herramientas_agregar = ["check_deps_muertas"]
+mapea_reglas_agregar = ["check:deps_muertas.*"]
+cobertura_fallback = "deps ~75 %, archivos ~50 %, exports 0 %, ciclos ~80 % (ESTIMACIÓN)"
+
+[[cambio_catalogo]]
+control = "SEG-DEPS-EXISTEN"
+mapea_reglas_agregar = ["check:deps_muertas.dep_no_declarada"]
+
+[[cambio_catalogo]]
+control = "DAT-MIGRACIONES-SEGURAS"
+herramientas_agregar = ["check_migraciones_sql"]
+mapea_reglas_agregar = ["check:migraciones_sql.index_*", "check:migraciones_sql.drop_*", "check:migraciones_sql.concurrently_*", "check:migraciones_sql.not_null_*", "check:migraciones_sql.set_not_null", "check:migraciones_sql.rename", "check:migraciones_sql.cambio_tipo", "check:migraciones_sql.*_sin_not_valid", "check:migraciones_sql.sin_lock_timeout", "check:migraciones_sql.migraciones"]
+cobertura_fallback = "~60 % (ESTIMACIÓN)"
+
+[[cambio_catalogo]]
+control = "DAT-TIPOS"
+herramientas_agregar = ["check_migraciones_sql"]
+mapea_reglas_agregar = ["squawk:prefer-*", "check:migraciones_sql.tipo_*"]
+
+[[cambio_catalogo]]
+control = "ESC-SMOKE"
+herramientas_agregar = ["check_humo_http"]
+mapea_reglas_agregar = ["check:humo_http.*"]
+cobertura_fallback = "~50 % (ESTIMACIÓN); requiere URL autorizada"
+
+[[cambio_catalogo]]
+control = "INF-DOCKERFILE"
+herramientas_agregar = ["check_dockerfile"]
+mapea_reglas_agregar = ["check:dockerfile.*"]
+cobertura_fallback = "~80 % de la intención del control (ESTIMACIÓN)"
+
+[[cambio_catalogo]]
+control = "SEG-SECRETO-REPO"
+mapea_reglas_agregar = ["check:dockerfile.secreto_en_env", "check:iac.tf_secreto_literal"]
+
+[[cambio_catalogo]]
+control = "SEG-CICD"
+herramientas_agregar = ["check_workflows"]
+mapea_reglas_agregar = ["check:workflows.sin_*", "check:workflows.job_*", "check:workflows.tabulador", "check:workflows.expresion_*", "check:workflows.runner_*", "check:workflows.sintaxis"]
+
+[[cambio_catalogo]]
+control = "COD-CI-BASICO"
+herramientas_agregar = ["check_workflows"]
+mapea_reglas_agregar = ["check:workflows.ci_*"]
+
+[[cambio_catalogo]]
+control = "INF-IAC"
+herramientas_agregar = ["check_iac"]
+mapea_reglas_agregar = ["check:iac.*"]
+cobertura_fallback = "~50 % de misconfigs críticos típicos (ESTIMACIÓN)"
+
+[[cambio_catalogo]]
+control = "SEG-SBOM"
+herramientas_agregar = ["check_sbom"]
+mapea_reglas_agregar = ["check:sbom.sbom_*"]
+
+[[cambio_catalogo]]
+control = "COD-LICENCIAS"
+herramientas_agregar = ["check_sbom"]
+mapea_reglas_agregar = ["check:sbom.licencia_*", "check:sbom.proyecto_*"]
+
+[[cambio_catalogo]]
+control = "SEG-DAST-PLANTILLAS"
+herramientas_agregar = ["check_exposicion_http"]
+mapea_reglas_agregar = ["check:exposicion_http.*"]
+
+[[cambio_catalogo]]
+control = "SEG-BFLA"
+mapea_reglas_agregar = ["check:exposicion_http.panel_admin"]
+
+[[cambio_catalogo]]
+control = "SEG-DAST-PASIVO"
+herramientas_agregar = ["check_pasivo_http"]
+mapea_reglas_agregar = ["check:pasivo_http.*"]
+
+[[cambio_catalogo]]
+control = "SEG-HEADERS"
+mapea_reglas_agregar = ["check:pasivo_http.sin_*", "check:pasivo_http.csp_*", "check:pasivo_http.version_servidor", "check:pasivo_http.contenido_mixto"]
+
+[[cambio_catalogo]]
+control = "SEG-COOKIES"
+mapea_reglas_agregar = ["check:pasivo_http.cookie_sin_flags", "check:pasivo_http.password_autocomplete"]
+
+[[cambio_catalogo]]
+control = "SEG-CORS"
+mapea_reglas_agregar = ["check:pasivo_http.cors_comodin"]
+
+[[cambio_catalogo]]
+control = "SEG-CSRF"
+mapea_reglas_agregar = ["check:pasivo_http.form_sin_csrf"]
+
+[[cambio_catalogo]]
+control = "SEG-ERRORES"
+mapea_reglas_agregar = ["check:pasivo_http.traza_en_error", "check:pasivo_http.info_en_comentarios"]
+
+[[cambio_catalogo]]
+control = "INF-CACHE-CDN"
+mapea_reglas_agregar = ["check:pasivo_http.cache_sensible", "check:presupuesto_build.sin_cache_hash"]
+
+[[cambio_catalogo]]
+control = "UX-LIGHTHOUSE"
+herramientas_agregar = ["check_presupuesto_build"]
+mapea_reglas_agregar = ["check:presupuesto_build.*"]
+nota = "Solo hallazgos; el pase de UX-LIGHTHOUSE y UX-LCP-LAB exige lhci (LCP solo se mide en navegador)."
+
+# UX: el fallback estático solo aporta hallazgos (fail), nunca pase de controles dinámicos.
+[[cambio_catalogo]]
+control = "UX-LANG"
+mapea_reglas_agregar = ["check:ux_estatico.html_sin_lang"]
+[[cambio_catalogo]]
+control = "UX-REFLOW"
+mapea_reglas_agregar = ["check:ux_estatico.sin_viewport", "check:ux_estatico.ancho_fijo"]
+[[cambio_catalogo]]
+control = "UX-AXE-CRIT"
+mapea_reglas_agregar = ["check:ux_estatico.img_sin_alt", "check:ux_estatico.boton_sin_nombre"]
+[[cambio_catalogo]]
+control = "UX-FORMULARIOS"
+mapea_reglas_agregar = ["check:ux_estatico.input_*"]
+[[cambio_catalogo]]
+control = "UX-TECLADO"
+mapea_reglas_agregar = ["check:ux_estatico.click_en_div", "check:ux_estatico.tabindex_positivo", "check:ux_estatico.outline_none"]
+[[cambio_catalogo]]
+control = "UX-FOCO-OCULTO"
+mapea_reglas_agregar = ["check:ux_estatico.outline_none"]
+[[cambio_catalogo]]
+control = "UX-TACTIL"
+mapea_reglas_agregar = ["check:ux_estatico.objetivo_pequeno"]
+[[cambio_catalogo]]
+control = "UX-CONSENTIMIENTO"
+mapea_reglas_agregar = ["check:ux_estatico.tracker_sin_consentimiento"]
+[[cambio_catalogo]]
+control = "UX-SW-PWA"
+mapea_reglas_agregar = ["check:ux_estatico.manifest_incompleto"]
+[[cambio_catalogo]]
+control = "UX-ESTADOS"
+mapea_reglas_agregar = ["check:ux_estatico.fetch_sin_catch"]
+
+# DAT (splinter): fallback estático sobre migraciones. Orden preferido: splinter vía psql > MCP get_advisors > fallback.
+[[cambio_catalogo]]
+control = "DAT-RLS-ON"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.rls_deshabilitado", "check:rls_estatico.vista_security_definer"]
+[[cambio_catalogo]]
+control = "DAT-RLS-PERMISIVA"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.rls_sin_politica", "check:rls_estatico.politica_siempre_true"]
+[[cambio_catalogo]]
+control = "DAT-RLS-METADATA"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.politica_user_metadata"]
+[[cambio_catalogo]]
+control = "DAT-SECDEF"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.secdef_*"]
+[[cambio_catalogo]]
+control = "DAT-GRANTS"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.auth_users_expuesto", "check:rls_estatico.grant_anon_amplio"]
+[[cambio_catalogo]]
+control = "DAT-PK-FK"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.sin_pk"]
+[[cambio_catalogo]]
+control = "DAT-FK-INDICE"
+herramientas_agregar = ["check_rls_estatico"]
+mapea_reglas_agregar = ["check:rls_estatico.fk_sin_indice"]
+[[cambio_catalogo]]
+control = "DAT-BUCKETS"
+mapea_reglas_agregar = ["check:rls_estatico.bucket_publico"]
+
+# ---------------------------------------------------------------------------
+# B. Cambios a scripts/doctor.sh: faltan 4 herramientas en CATALOGO.
+#    Formato existente: nombre|comando de versión|instalación sugerida|¿npx? (s/n)
+# ---------------------------------------------------------------------------
+[cambio_doctor]
+agregar = [
+  "nuclei|nuclei -version|brew install nuclei|n",
+  "syft|syft version|brew install syft|n",
+  "zap|zap.sh -version|brew install --cask zap (o Docker: ghcr.io/zaproxy/zaproxy:stable zap-baseline.py)|n",
+  "psql|psql --version|brew install libpq (para correr splinter.sql contra una conexión de solo lectura)|n",
+]
+corregir = [
+  # La instrucción actual de playwright instala el paquete global; la doc oficial usa @playwright/test por proyecto.
+  "playwright|npx playwright --version|npm install -D @playwright/test && npx playwright install chromium|s",
+]
+mensajes = [
+  "trivy falta: la función de dependencias la cubre osv-scanner (instalado); IaC/Dockerfile usan fallback.",
+  "actionlint falta: la seguridad de workflows la cubre zizmor (instalado); fallback check_workflows para sintaxis mínima.",
+  "lizard: instalar con pipx; `brew install lizard` instala un compresor distinto (formulae.brew.sh/api/formula/lizard.json).",
+  "splinter no se instala: usar MCP Supabase get_advisors (solo lectura) o psql -f splinter.sql; si no, fallback estático.",
+]
+nunca_instalar_sin_confirmacion = true
+
+# ---------------------------------------------------------------------------
+# C. Cambios al contrato de checks (scripts/checks/comun.py y normalizar/checks.py)
+# ---------------------------------------------------------------------------
+[cambio_contrato]
+campos_nuevos_en_resultado = ["reemplaza", "cobertura"]   # p. ej. reemplaza = "hadolint", cobertura = "parcial (fallback)"
+propagar_a = ["cada hallazgo normalizado", "estado.json del control"]
+exclusiones_recorrido_agregar = ["datos-reales", "datos-abiertos"]   # Decisión 3 (kine us herramienta)
+regla_pase = "Un fallback marcado `controles_solo_fail` (ux_estatico, presupuesto_build, rls_estatico para DAT-RLS-ON/PERMISIVA) no puede dejar un control en pass; sin hallazgos → no_evaluado (UX) o manual_pendiente (DAT) con aviso de cobertura parcial."
+red = "check_humo_http, check_exposicion_http y check_pasivo_http solo con --url declarada y confirmada; solo GET/HEAD; host local o preview confirmado por el creador."
+
+# ---------------------------------------------------------------------------
+# D. Cambio a config/umbrales.toml (Decisión 2: preferir defaults ampliamente adoptados)
+# ---------------------------------------------------------------------------
+[cambio_umbral.complejidad_ciclomatica_max]
+valor = 15
+origen_actual = "propuesta"
+origen_propuesto = "default_herramienta"
+fuente_propuesta = "https://github.com/terryyin/lizard/blob/master/lizard_core/options.py (DEFAULT_CCN_THRESHOLD = 15)"
+nota = "Verificado con gh api el 2026-11-18. Es un default de herramienta, no una norma."
+
+[cambio_umbral.duplicacion_min_tokens]
+valor = 50
+origen_propuesto = "default_herramienta"
+fuente_propuesta = "https://github.com/kucherenko/jscpd/blob/master/rust/jscpd/README.md (tabla de opciones: --min-tokens default 50)"
+nota = "Nuevo umbral para calibrar check_duplicacion igual que jscpd. Corregido en verificación 2026-11-18: la fuente anterior (rust/README.md) solo mostraba 50 en un ejemplo, no como default."
+
+[cambio_umbral.duplicacion_min_lineas]
+valor = 5
+origen_propuesto = "default_herramienta"
+fuente_propuesta = "https://github.com/kucherenko/jscpd/blob/master/rust/jscpd/README.md (tabla de opciones: --min-lines default 5)"
+nota = "Agregado en verificación 2026-11-18; antes figuraba como NO VERIFICADO en el informe 13."

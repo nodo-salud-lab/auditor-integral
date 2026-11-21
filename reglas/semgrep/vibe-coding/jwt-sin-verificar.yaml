@@ -1,0 +1,30 @@
+rules:
+  - id: jwt-sin-verificar
+    message: >-
+      Token JWT aceptado sin verificar firma o vencimiento: jwt.decode() no verifica la firma,
+      algorithms con 'none' acepta tokens sin firmar e ignoreExpiration acepta tokens vencidos.
+      Usar jwt.verify(token, secreto, { algorithms: ['HS256'] }) (o el algoritmo fijo que corresponda).
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-JWT
+      cwe: "CWE-347: Improper Verification of Cryptographic Signature"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              $JWT = require($MOD)
+              ...
+          - pattern-inside: |
+              import $JWT from $MOD
+              ...
+          - pattern-inside: |
+              import * as $JWT from $MOD
+              ...
+      - metavariable-regex:
+          metavariable: $MOD
+          regex: ^['"]?jsonwebtoken['"]?$
+      - pattern-either:
+          - pattern: $JWT.decode(...)
+          - pattern: '$JWT.verify($T, $K, {..., algorithms: [..., "none", ...], ...}, ...)'
+          - pattern: '$JWT.verify($T, $K, {..., ignoreExpiration: true, ...}, ...)'

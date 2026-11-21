@@ -1,0 +1,40 @@
+# Remediación por control (texto que acompaña a cada hallazgo; ≤ 600 caracteres).
+# GUÍA procedimental: no son parches; el dueño decide cómo aplicarla. Los controles sin entrada usan
+# el texto genérico de normalizar/comun.py ("Corregir el incumplimiento de «título» y volver a auditar").
+
+[remediacion]
+"SEG-SECRETO-REPO" = "Rotar (revocar y regenerar) la credencial en el proveedor de inmediato: está expuesta aunque se borre del archivo. Sacarla del repositorio (variables de entorno del hosting o gestor de secretos), agregar el archivo a .gitignore y, si quedó en el historial, limpiarlo (git filter-repo) después de rotar."
+"SEG-SECRETO-BUNDLE" = "Rotar la clave y moverla al servidor: nada con privilegios (service_role, sk_live, claves AWS u OpenAI) puede ir en el código que se descarga el navegador. Llamar al proveedor desde una función de servidor y volver a construir el bundle."
+"SEG-SECRETO-LOCAL" = "No hace falta rotar ni limpiar el historial con git filter-repo: son secretos en archivos que git ignora y nunca versionó, o claves anon (públicas por diseño). Mantenerlos fuera del repositorio (que el archivo siga en .gitignore y ningún build lo copie a lo publicado), rotar solo si el archivo salió de esta máquina y, con la clave anon, verificar que RLS proteja cada tabla expuesta."
+"SEG-ENV-PUBLICAS" = "Las variables con prefijo público (VITE_, NEXT_PUBLIC_, EXPO_PUBLIC_) se incrustan en el bundle del navegador. Quitar el prefijo a toda variable secreta, usarla solo en el servidor y rotar las que ya se publicaron."
+"SEG-ENV-EJEMPLO" = "Crear .env.example con los nombres de todas las variables requeridas y valores ficticios, y documentarlo en el README. Nunca copiar valores reales."
+"SEG-DEPS-EXISTEN" = "Verificar en el registro (npm/PyPI) que cada dependencia existe y es la esperada; eliminar paquetes inexistentes o sospechosos (slopsquatting) y regenerar el lockfile."
+"SEG-DEPS-CVE-CRIT" = "Actualizar el paquete a una versión corregida (ver el aviso en osv.dev) y regenerar el lockfile; si no hay versión corregida, reemplazar el paquete o mitigar y documentar la excepción."
+"SEG-DEPS-CVE-ALTO" = "Planificar la actualización de los paquetes con avisos altos a versiones corregidas y regenerar el lockfile."
+"SEG-LOCKFILE" = "Versionar el lockfile del gestor de paquetes (package-lock.json, pnpm-lock.yaml, poetry.lock...) e instalar en CI con el modo estricto (npm ci)."
+"SEG-SAST-INY" = "Revisar el flujo de datos señalado: no evaluar código ni HTML construido con datos del usuario (eval, dangerouslySetInnerHTML, concatenación); validar y escapar en el servidor y usar las API seguras del framework."
+"SEG-AUTH-CLIENTE" = "La autorización debe verificarse en el servidor (o en RLS) en cada petición; ocultar botones o rutas en el frontend no protege los datos."
+"SEG-AGENTES-IA" = "Quitar bypassPermissions y permisos amplios (Bash(*)) de la configuración del agente; listar solo los comandos necesarios y no exponer credenciales en .mcp.json."
+"SEG-CICD" = "Fijar las acciones de GitHub a un SHA, evitar pull_request_target con checkout del código del PR, no interpolar ${{ github.event.* }} en run: (usar variables de entorno) y usar permisos mínimos."
+"SEG-JWT" = "Verificar firma, algoritmo fijo y expiración de los JWT en el servidor; no usar secretos débiles ni el algoritmo none."
+"SEG-PAGOS-SERVIDOR" = "Calcular el monto en el servidor a partir del producto o la orden; nunca confiar en un monto enviado por el cliente."
+"SEG-CORS" = "No combinar origen comodín con credenciales; listar los orígenes permitidos explícitamente."
+"SEG-ERRORES" = "No silenciar errores con catch vacío: registrar el error y devolver un mensaje genérico al usuario sin detalles internos."
+"DAT-PII-TEST" = "Confirmar que los datos del archivo de test o fixture son ficticios (nombres, RUT, correos de dominios reservados como example.com o .test). Si hay datos reales, sacarlos del repositorio, reemplazarlos por datos generados y limpiar el historial."
+"SEG-BFLA" = "Proteger en el servidor cada ruta de administración o depuración con autenticación y verificación de rol (middleware o dependencia), o eliminarla del despliegue; no basta con ocultarla en el frontend."
+"DAT-SQL-CONCATENADO" = "Usar consultas parametrizadas o el ORM; nunca concatenar datos del usuario en SQL."
+"DAT-RLS-ON" = "Habilitar Row Level Security en toda tabla expuesta por la API y crear políticas por comando (select, insert, update, delete) que filtren por el usuario dueño."
+"DAT-RLS-DENY-ALL" = "Confirmar que la tabla debe ser inaccesible vía API para anon y authenticated (solo service_role o funciones del servidor la leen). Si es intencional, dejarlo documentado en la migración y marcarlo como falso positivo verificado; si el cliente necesita leerla o escribirla, crear políticas por comando (select, insert, update, delete) que filtren por el usuario dueño, nunca USING (true)."
+"DAT-ESQUEMA-VERSIONADO" = "Versionar el esquema con migraciones en el repositorio (supabase/migrations, prisma/migrations) y aplicarlas solo por esa vía."
+"COD-REPRO" = "Documentar en el README cómo instalar, configurar (.env.example) y arrancar el proyecto desde cero, y verificar que funciona en una máquina limpia."
+"COD-CI-BASICO" = "Agregar un workflow de CI que instale dependencias, corra lint, typecheck y tests de humo en cada PR."
+"OPS-HEALTH" = "Agregar un endpoint /health que responda 200 sin datos sensibles y usarlo en el monitoreo de disponibilidad."
+"OPS-ERROR-TRACKING" = "Configurar un servicio de seguimiento de errores (p. ej. Sentry) en frontend y backend, sin enviar datos personales."
+
+# R6 (gates-cli): variantes para SEG-SECRETO-REPO y SEG-SECRETO-BUNDLE según dónde está el secreto (roadmap.remediacion_secreto).
+# Se usan solo si TODAS las instancias del control traen la marca correspondiente; si una sola está versionada, en el
+# historial o sin marca, queda el texto de [remediacion] (rotar + limpiar el historial).
+[remediacion_secreto]
+"no_versionado" = "El secreto está en un archivo que git no versiona (ignorado o sin git add): no hace falta limpiar el historial con git filter-repo. Mantenerlo fuera del repositorio (confirmar que el archivo sigue en .gitignore y que ningún build lo copie a lo publicado) y rotar la credencial solo si el archivo se compartió, se subió a otro lugar o salió de esta máquina."
+"clave_publica" = "La clave detectada es de rol anon: es pública por diseño en una app cliente y no hace falta rotarla ni limpiar el historial. Lo que protege los datos es RLS: verificar que cada tabla expuesta tenga RLS con políticas por usuario (DAT-RLS-ON, DAT-ANON-NEGATIVA) y que ninguna clave service_role esté en el repositorio ni en el bundle."
+"no_versionado_y_publica" = "Las instancias son claves anon (públicas por diseño) o secretos en archivos que git no versiona: no hace falta limpiar el historial con git filter-repo. Mantener esos archivos fuera del repositorio, rotar una credencial solo si su archivo salió de esta máquina y verificar que RLS proteja cada tabla expuesta (la clave anon da el acceso que RLS permita)."

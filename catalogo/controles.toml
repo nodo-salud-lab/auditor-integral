@@ -1,0 +1,3581 @@
+# Catálogo canónico de controles de auditor-integral (fuente única de verdad).
+#
+# Formato: PLAN_MAESTRO.md §3.5. Gates según la tabla §4.3 (vista resumida).
+# Construido deduplicando los checks de los informes 01-08 (lista completa en
+# alias_fuente.json) sobre la base del catálogo de 09-diseno-B §7.
+#
+# Convenciones:
+#   - alias: IDs de origen (VC/SEC/DB/INF/UX/ING/ECO/GAP). Cada alias está en un solo control.
+#   - condicion: expresión sobre las banderas de perfil.json (ver perfil_riesgo.toml):
+#     "siempre" | bandera | bandera ==/!=/</<=/>/>= literal, con and / or / not y paréntesis.
+#     Bandera sin respuesta (null) = condición desconocida: el control queda aplicable y,
+#     si no se puede evaluar, sale no_evaluado (no se asume la respuesta).
+#   - mapea_reglas: "herramienta:regla" con comodines fnmatch; gana el patrón más específico
+#     (más caracteres literales). Convenciones de regla de los normalizadores:
+#       gitleaks-bundle:<regla>  hallazgo de gitleaks en dist/, build/, .next/ u out/
+#       osv:<severidad>/<id>     severidad en minúsculas: critica | alta | media | baja
+#       check:<script>.<clave>   chequeos propios de scripts/checks/
+#       axe:<impacto>/<regla>    lint:<plugin>/<regla>   k6:<escenario>
+#   - evidencia_pass (sin «pases vacíos»; cada control justifica su elección en «# evidencia_pass: …»):
+#       "ausencia_suficiente"     la herramienta cubre el control completo y su ausencia de hallazgos es evidencia,
+#                                 con precondición de alcance: alcance_requerido = ["herramienta.clave"] (meta.alcance
+#                                 ≥ 1 objeto analizado). Alcance 0 → sin_alcance (no_aplica | no_evaluado) con
+#                                 motivo_sin_alcance. Sin alcance registrado → no_evaluado (fail-closed).
+#       "checks_pass"             solo pasa con un pase explícito en checks_pass (default si falta el campo).
+#       "no_demostrable_estatico" no pasa en análisis estático: no_evaluado («requiere juicio LLM / sonda dinámica /
+#                                 entrevista»; lo resuelven F3 revisores, F4 sondas o la entrevista).
+#     En las tres categorías los hallazgos siguen dando fail. Ver scripts/estado.py.
+#   - severidad_base y esfuerzo: ESTIMACIÓN (propuesta; los decide el investigador).
+#   - Los controles legales de OPS no bloquean el nivel global (DECISIONES.md #4).
+#   - Un mismo nombre en dos niveles de §4.3 se separa en dos controles (p. ej. INF-ENTORNOS
+#     y INF-ENTORNOS-SEPARADOS). DAT-RLS-ON tiene gate N2 y perfil_riesgo.toml lo baja a N1
+#     cuando hay datos reales cargados.
+
+
+# ======================================================================
+# SEG — Seguridad
+# ======================================================================
+
+[[control]]
+id = "SEG-SECRETO-REPO"
+titulo = "Sin secretos en el working tree ni en el historial git"
+alias = ["VC-04", "SEC-01", "ECO-02", "INF-03"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["gitleaks", "trufflehog"]
+condicion = "siempre"
+bloquea_global = true
+mapea_reglas = ["gitleaks:*", "semgrep:generic.secrets.*", "check:dockerfile.secreto_en_env", "check:iac.tf_secreto_literal", "check:archivos_clave.secreto_en_env"]
+# Ronda 3 (h_env): gitleaks no reconoce contraseñas de nombre genérico (DB_PASSWORD=…) ni JWT de Supabase con role service_role en .env; archivos_clave.secreto_en_env los reporta (sin copiar el valor) y da fail. No emite pase: el pass sigue saliendo de gitleaks.
+# evidencia_pass: gitleaks recorre working tree e historial con reglas propias (sin .gitleaks.toml del repo): su ausencia de hallazgos con ≥ 1 archivo escaneado es la evidencia que pide el control. Ronda 1: en un repo git con commits también exige el historial escaneado (alcance_condicional); sin repo git basta el árbol.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["gitleaks.arbol"]
+alcance_condicional = [{requiere = "gitleaks.historial", si = "gitleaks.commits", motivo = "repositorio git con historial: el control también exige escanear el historial"}]
+alcance_excluyente = [{clave = "gitleaks.codigo_confidencial", motivo = "hay código o archivos .env en rutas confidenciales (config/confidencial.toml, p. ej. src/patients/) que gitleaks no escanea: la ausencia de hallazgos no los cubre (ronda 4, PV-R3-01)"}]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin archivos que escanear en el working tree"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-04); investigacion/02-seguridad.md (SEC-01); investigacion/04-infra-escalabilidad-carga.md (INF-03); investigacion/07-repos-skills-expertos.md (ECO-02)"
+
+[[control]]
+id = "SEG-SECRETO-BUNDLE"
+titulo = "Sin claves privilegiadas (service_role, sk_live, AKIA) en el build del cliente (dist, build, .next, out)"
+alias = ["VC-05", "SEC-02", "DB-05", "ECO-06"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["gitleaks", "semgrep"]
+# semgrep solo cubre service_role en el código del cliente: sus hallazgos dan fail, pero sin gitleaks
+# (que escanea dist/ build/ .next/ out/) el control no puede pasar (corrección post-verificación).
+herramientas_parciales = ["semgrep"]
+condicion = "siempre"
+bloquea_global = true
+# D39 (10-f0-f1-resultados §6.1): service_role leída desde una variable pública en el CÓDIGO FUENTE va a
+# SEG-AUTH-CLIENTE; aquí solo cuenta si el archivo es de build (dist/ build/ .next/ out/ → "<herr>-bundle:").
+mapea_reglas = ["gitleaks-bundle:*", "semgrep-bundle:vibe-coding.service-role-cliente"]
+# evidencia_pass: gitleaks escanea dist/ build/ .next/ out/ aunque estén ignorados: la ausencia vale solo si escaneó ≥ 1 carpeta de bundle; sin bundle el control no aplica (semgrep es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["gitleaks.bundles"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin bundle"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-05); investigacion/02-seguridad.md (SEC-02); investigacion/03-bases-de-datos.md (DB-05); investigacion/07-repos-skills-expertos.md (ECO-06)"
+
+[[control]]
+id = "SEG-SECRETO-LOCAL"
+titulo = "Secretos locales no versionados (ignorados por git) y claves públicas por diseño (JWT anon) fuera del repo y del build"
+# Ronda 6 (DECISIONES.md #12): gitleaks (normalizar/gitleaks.py) etiqueta como «secreto-local-ignorado:<regla>» los
+# hallazgos en archivos ignorados por git y nunca versionados, y como «jwt-anon-publico:<regla>» los JWT con role anon
+# (clave pública por diseño de Supabase); archivos_clave hace lo mismo con secreto_en_env_local (.env ignorado y sin
+# historial). Antes iban a SEG-SECRETO-REPO/BUNDLE (críticos, bloquean el global, «rotar + filter-repo»). Aquí siguen
+# visibles con severidad baja, sin bloqueo, y la remediación no pide rotar. Por especificidad del patrón ganan sobre
+# gitleaks:* y gitleaks-bundle:*. service_role, otros roles, JWT ilegibles y secretos versionados, sin seguimiento o
+# ignorados con historial siguen en SEG-SECRETO-REPO/BUNDLE (fail-closed).
+alias = []
+dominio = "SEG"
+etapa = "E2"
+gate = "N3"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["gitleaks", "archivos_clave"]
+herramientas_parciales = ["archivos_clave"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["gitleaks:secreto-local-ignorado:*", "gitleaks:jwt-anon-publico:*", "gitleaks-bundle:jwt-anon-publico:*", "gitleaks-bundle:secreto-local-ignorado:*", "check:archivos_clave.secreto_en_env_local"]
+# evidencia_pass: gitleaks escanea el working tree y, aparte y con presupuesto propio, las carpetas ignoradas por git: su ausencia de hallazgos vale solo con ≥ 1 archivo escaneado y si no quedó ninguna carpeta ignorada sin escanear (gitleaks.ignoradas_pendientes, alcance_excluyente); archivos_clave es parcial.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["gitleaks.arbol"]
+alcance_excluyente = [{clave = "gitleaks.ignoradas_pendientes", motivo = "quedaron carpetas ignoradas por git sin escanear (presupuesto agotado o error): la ausencia de hallazgos no las cubre"}]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin archivos que escanear en el working tree"
+esfuerzo = "S"
+fuente = "DECISIONES.md #12 (ronda 6); investigacion/02-seguridad.md (SEC-01)"
+
+[[control]]
+id = "SEG-ENV-PUBLICAS"
+titulo = "Variables VITE_/NEXT_PUBLIC_/EXPO_PUBLIC_ sin nombres ni valores sensibles"
+alias = ["VC-06"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["env_publicas"]
+condicion = "siempre"
+bloquea_global = true
+mapea_reglas = ["check:env_publicas", "check:env_publicas.*"]
+# evidencia_pass: check propio (env_publicas): emite un pase explícito (check:env_publicas…) solo si analizó ≥ 1 archivo .env* o código que lee variables de entorno (ronda 1); si no hay nada de eso queda no_aplica con motivo.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-06)"
+
+[[control]]
+id = "SEG-ENV-EJEMPLO"
+titulo = ".env ignorado por git y .env.example sin valores reales"
+alias = ["SEC-03", "ING-08"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N1"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["archivos_clave"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.env_*"]
+# evidencia_pass: check propio (archivos_clave): emite un pase explícito (check:archivos_clave.env_*…) cuando verifica la condición; que solo corra no basta.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-03); investigacion/06-ingenieria-software-ciclo.md (ING-08)"
+
+[[control]]
+id = "SEG-LLM-CLAVE"
+titulo = "Clave del proveedor LLM solo en el servidor"
+alias = ["SEC-30"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["gitleaks", "env_publicas"]
+condicion = "llm == true"
+bloquea_global = true
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: que la clave del LLM solo viva en el servidor exige seguir su uso de punta a punta; gitleaks/env_publicas no lo demuestran → F3 revisor.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-30)"
+
+[[control]]
+id = "SEG-DEPS-EXISTEN"
+titulo = "Dependencias existentes en el registro, con antigüedad mínima y sin typosquat (anti-slopsquatting)"
+alias = ["VC-10", "SEC-05", "ING-03"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["registro_deps"]
+condicion = "siempre"
+bloquea_global = true
+mapea_reglas = ["check:registro_deps.inexistente", "check:registro_deps.*"]
+# evidencia_pass: check propio (registro_deps): emite un pase explícito (check:registro_deps.inexistente…) cuando verifica la condición; que solo corra no basta.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-10); investigacion/02-seguridad.md (SEC-05); investigacion/06-ingenieria-software-ciclo.md (ING-03)"
+
+[[control]]
+id = "SEG-DEPS-CVE-CRIT"
+titulo = "Sin CVE críticos en dependencias de producción"
+alias = ["SEC-06"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["osv-scanner", "trivy"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["osv:critica/*"]
+# evidencia_pass: osv-scanner contrasta cada versión resuelta del lockfile con OSV: con ≥ 1 lockfile, cero vulnerabilidades críticas es evidencia completa.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["osv-scanner.lockfiles"]
+alcance_excluyente = [{clave = "osv-scanner.lockfiles_confidenciales", motivo = "hay lockfiles en rutas confidenciales (config/confidencial.toml) cuyos resultados se descartan: la ausencia de avisos no los cubre (ronda 4, PV-R3-01)"}]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin lockfile: osv no puede resolver versiones (ver SEG-LOCKFILE)"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-06)"
+
+[[control]]
+id = "SEG-LOCKFILE"
+titulo = "Lockfile comiteado, instalación reproducible en CI y hosts de registro permitidos"
+alias = ["VC-11", "SEC-04"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["archivos_clave", "lockfile-lint"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.lockfile*", "check:archivos_clave.lockfile_valido", "check:archivos_clave.lockfile_versionado", "check:archivos_clave.lockfile_ci", "check:archivos_clave.lockfile_hosts"]
+# evidencia_pass: check propio (archivos_clave, lockfile-lint). Ronda 2: la mera existencia del archivo ya no basta; el título exige las tres partes y pases_requeridos las pide todas (AND): contenido válido (lockfile_valido; vacío → hallazgo lockfile_vacio), versionado en git (lockfile_versionado), instalación reproducible en un CI de push/PR (lockfile_ci: npm ci, --frozen-lockfile, --immutable, uv sync --locked…) y hosts de registro permitidos (lockfile_hosts: solo https a registry.npmjs.org, registry.yarnpkg.com, pypi.org o files.pythonhosted.org; http → hallazgo).
+pases_requeridos = ["check:archivos_clave.lockfile_valido", "check:archivos_clave.lockfile_versionado", "check:archivos_clave.lockfile_ci", "check:archivos_clave.lockfile_hosts"]
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-11); investigacion/02-seguridad.md (SEC-04)"
+
+[[control]]
+id = "SEG-SAST-INY"
+titulo = "Sin inyección (NoSQL, comandos, código), XSS, eval ni path traversal"
+alias = ["VC-09", "SEC-07", "ECO-03"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["semgrep", "bandit"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:vibe-coding.eval-dinamico", "semgrep:vibe-coding.comando-concatenado", "semgrep:*xss*", "semgrep:*path-traversal*", "semgrep:*"]
+# evidencia_pass: SAST de patrones (p/owasp-top-ten + reglas vibe-coding, cualquier hallazgo semgrep:* cuenta): la ausencia con ≥ 1 archivo fuente analizado es la evidencia de N2; el juicio semántico va en SEG-SAST-TRIAGE. Alcance (ronda 1): paths.scanned de semgrep, solo lenguajes con reglas de inyección y sin código de test (el código de test se escanea, pero no cuenta como alcance).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["semgrep.fuentes"]
+# Ronda 2: el código escaneado para el que el ruleset cargado no tiene reglas de inyección (Python sin Flask/Django/Pyramid/Lambda, Kotlin, Scala…) bloquea el pass: la ausencia de hallazgos no lo cubre.
+alcance_excluyente = [{clave = "semgrep.fuentes_sin_reglas", motivo = "hay código de aplicación escaneado sin reglas de inyección en los rulesets cargados (p. ej. Python sin Flask/Django, Kotlin, Scala): la ausencia de hallazgos no lo cubre"}, {clave = "semgrep.fuentes_no_escaneadas", motivo = "hay código de aplicación que semgrep no escaneó (rutas confidenciales de config/confidencial.toml o archivos > 2 MB): la ausencia de hallazgos no lo cubre (ronda 4, PV-R3-01/04)"}]
+# Ronda 3 (PV-R2-06): control_por_regla asigna cada hallazgo de semgrep a UN control; las inyecciones SQL (vibe-coding.sql-concatenado, *sqli*, *tainted-sql*) van a DAT-SQL-CONCATENADO. Si en la misma corrida ese control tiene hallazgos, la propia herramienta encontró una inyección y SEG-SAST-INY no puede quedar en pass (queda no_evaluado; el fail lo lleva DAT-SQL-CONCATENADO, sin duplicar el hallazgo).
+pass_contradicho_por = [{control = "DAT-SQL-CONCATENADO", motivo = "semgrep encontró una inyección SQL en la misma corrida (hallazgo de DAT-SQL-CONCATENADO): la ausencia de otros hallazgos de inyección no demuestra que no haya inyección"}]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin archivos de código fuente (fuera de tests) en lenguajes que cubren las reglas de semgrep"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-09); investigacion/02-seguridad.md (SEC-07); investigacion/07-repos-skills-expertos.md (ECO-03)"
+
+[[control]]
+id = "SEG-SAST-TRIAGE"
+titulo = "Triage de falsos positivos en hallazgos SAST críticos y altos"
+alias = ["SEC-08", "ECO-10"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["triage-fp", "fp-check"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (triage-fp, fp-check): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-08); investigacion/07-repos-skills-expertos.md (ECO-10)"
+
+[[control]]
+id = "SEG-AUTH-CLIENTE"
+titulo = "La autorización no depende solo del estado del cliente (localStorage, contexto de React)"
+alias = ["VC-07"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-autorizacion"]
+condicion = "siempre"
+bloquea_global = false
+# D39: la service_role leída desde el cliente salta RLS y deja la autorización en manos del navegador.
+mapea_reglas = ["semgrep:vibe-coding.auth-solo-cliente", "semgrep:vibe-coding.service-role-cliente"]
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-07)"
+
+[[control]]
+id = "SEG-IDOR"
+titulo = "Autorización por objeto (BOLA/IDOR) en cada endpoint con ID"
+alias = ["VC-08", "SEC-10", "ECO-08"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["rutas_inventario", "revisor-autorizacion", "dos_usuarios"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: rutas_inventario, dos_usuarios solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-08); investigacion/02-seguridad.md (SEC-10); investigacion/07-repos-skills-expertos.md (ECO-08)"
+
+[[control]]
+id = "SEG-BFLA"
+titulo = "Autorización por función: rutas de administración protegidas en el servidor; sin /admin público"
+alias = ["SEC-11", "VC-23"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["rutas_inventario", "revisor-autorizacion", "nuclei"]
+condicion = "siempre"
+bloquea_global = false
+# Ronda 6 (DECISIONES.md #12): rutas_inventario emite ruta_admin_sin_auth (ruta o archivo admin/debug/internal sin
+# señal de auth en el handler, el archivo ni de forma global). Antes quedaba en sin_mapear.
+mapea_reglas = ["check:rutas_inventario.ruta_admin_sin_auth"]
+# evidencia_pass: rutas_inventario, nuclei solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-23); investigacion/02-seguridad.md (SEC-11)"
+
+[[control]]
+id = "SEG-AUTH-HASH"
+titulo = "Autenticación delegada a un proveedor probado o con hash fuerte (argon2id, bcrypt, scrypt)"
+alias = ["SEC-13"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-autorizacion"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-13)"
+
+[[control]]
+id = "SEG-JWT"
+titulo = "JWT con firma verificada, algoritmo fijo, exp presente y secreto fuerte"
+alias = ["SEC-14"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "gitleaks"]
+# gitleaks solo detecta secretos JWT filtrados; no verifica firma, algoritmo ni exp.
+herramientas_parciales = ["gitleaks"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:*jwt*", "semgrep:vibe-coding.jwt-sin-verificar"]
+# evidencia_pass: semgrep *jwt* solo ve verify ausente o algoritmo none en patrones conocidos; la validación completa (exp, aud, alg) requiere juicio → F3 revisor.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-14)"
+
+[[control]]
+id = "SEG-RESET-PWD"
+titulo = "Reset de contraseña con token de un solo uso, con expiración y sin enumeración de usuarios"
+alias = ["GAP-16"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-autorizacion"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-16)"
+
+[[control]]
+id = "SEG-AGENTES-IA"
+titulo = "Agentes y MCP del proyecto sin service_role, sin escritura en producción ni auto-aprobación; con guardarraíles"
+alias = ["VC-15", "ECO-20", "GAP-45"]
+dominio = "SEG"
+etapa = "E1"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["config_agentes", "skill-scanner"]
+condicion = "agente_ia == true"
+bloquea_global = false
+mapea_reglas = ["check:config_agentes.*"]
+# evidencia_pass: check propio (config_agentes, skill-scanner): emite un pase explícito (check:config_agentes.configuracion) solo si revisó ≥ 1 archivo de configuración de agentes/MCP sin problemas; que solo corra no basta. Ronda 1: sin .claude/settings*.json, .mcp.json, .cursor/mcp.json, .vscode/mcp.json ni .gemini/settings.json el check queda no_aplica (un CLAUDE.md enciende agente_ia, pero no hay permisos ni servidores MCP que revisar).
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-15); investigacion/07-repos-skills-expertos.md (ECO-20); investigacion/08-vacios-critico.md (GAP-45)"
+
+[[control]]
+id = "SEG-LLM-SALIDA"
+titulo = "La salida del LLM no llega sin sanitizar a SQL, HTML, shell ni eval"
+alias = ["VC-25", "SEC-31"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-arquitectura"]
+condicion = "llm == true"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-25); investigacion/02-seguridad.md (SEC-31)"
+
+[[control]]
+id = "SEG-STRIDE"
+titulo = "Modelo de amenazas STRIDE ligero desde el flujograma"
+alias = ["SEC-35", "ING-14"]
+dominio = "SEG"
+etapa = "E1"
+gate = "N2"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-35); investigacion/06-ingenieria-software-ciclo.md (ING-14)"
+
+[[control]]
+id = "SEG-PAGOS-FIRMA"
+titulo = "Webhook de pagos verifica la firma con el cuerpo crudo"
+alias = ["GAP-10"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["semgrep", "stripe-cli"]
+condicion = "pagos == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: solo vale un pase explícito (stripe-cli: webhook sin firma rechazado); semgrep sin reglas mapeadas no lo demuestra.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-10)"
+
+[[control]]
+id = "SEG-PAGOS-SERVIDOR"
+titulo = "Webhook idempotente por event.id; monto y estado de pago decididos por el servidor; checkout alojado"
+alias = ["GAP-11", "GAP-12", "GAP-13"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-arquitectura"]
+condicion = "pagos == true"
+bloquea_global = false
+mapea_reglas = ["semgrep:vibe-coding.monto-desde-body"]
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-11, GAP-12, GAP-13)"
+
+[[control]]
+id = "SEG-RATELIMIT"
+titulo = "Rate limiting en login, OTP, registro, recuperación de contraseña, LLM y pagos"
+alias = ["VC-21", "SEC-17", "INF-04", "ECO-15"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "k6"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: semgrep no tiene reglas de rate limiting; solo vale un pase explícito de k6 (429 bajo ráfaga).
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-21); investigacion/02-seguridad.md (SEC-17); investigacion/04-infra-escalabilidad-carga.md (INF-04); investigacion/07-repos-skills-expertos.md (ECO-15)"
+
+[[control]]
+id = "SEG-MASIVA"
+titulo = "Sin asignación masiva (BOPLA): el endpoint no acepta role, isAdmin u owner_id del cliente"
+alias = ["SEC-12"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-autorizacion"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:*mass-assignment*"]
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-12)"
+
+[[control]]
+id = "SEG-COOKIES"
+titulo = "Cookies de sesión HttpOnly, Secure y SameSite; sin token en localStorage"
+alias = ["SEC-15"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["zap", "semgrep"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:*cookie*"]
+# evidencia_pass: no demostrable en análisis estático (ronda 1): semgrep *cookie* no cubre todas las cookies emitidas (falso negativo conocido: cookies sin flags no tienen regla propia); el pase exige ZAP sobre las cookies reales (F4/F5). Si se integra ZAP con pase explícito, volver a checks_pass.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-15)"
+
+[[control]]
+id = "SEG-CSRF"
+titulo = "Protección CSRF cuando la sesión va por cookie"
+alias = ["SEC-16"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["zap", "semgrep"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:*csrf*"]
+# evidencia_pass: no demostrable en análisis estático (ronda 1): semgrep *csrf* no cubre el control; el pase exige ZAP sobre formularios reales (F4/F5). Si se integra ZAP con pase explícito, volver a checks_pass.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-16)"
+
+[[control]]
+id = "SEG-VALIDACION"
+titulo = "Validación por esquema en cada endpoint; límites de body y uploads; tipo MIME verificado"
+alias = ["SEC-18", "SEC-23"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:*open-redirect*"]
+# evidencia_pass: semgrep solo busca open-redirect; la validación de entrada de cada endpoint requiere juicio → F3 revisor / sonda dinámica.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-18, SEC-23)"
+
+[[control]]
+id = "SEG-SSRF"
+titulo = "Anti-SSRF: fetch con URL del usuario pasa por lista permitida y bloquea IP privadas y de metadatos"
+alias = ["SEC-19"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:*ssrf*", "semgrep:*injection.ssrf*"]
+# evidencia_pass: las reglas ssrf de semgrep solo ven patrones directos de URL controlada; el flujo real requiere juicio → F3 revisor / sonda dinámica.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-19)"
+
+[[control]]
+id = "SEG-HEADERS"
+titulo = "Cabeceras CSP, HSTS, X-Content-Type-Options, frame-ancestors y Referrer-Policy"
+alias = ["VC-20", "SEC-20"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["headers", "zap"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["headers:*"]
+# evidencia_pass: el sondeo de cabeceras inspecciona la respuesta HTTP real: ausencia de hallazgos con ≥ 1 URL sondeada cubre el control.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["headers.urls"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin URL desplegada que sondear"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-20); investigacion/02-seguridad.md (SEC-20)"
+
+[[control]]
+id = "SEG-CORS"
+titulo = "CORS con orígenes explícitos; sin * con credenciales"
+alias = ["SEC-21"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "zap"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:vibe-coding.cors-comodin-credenciales", "semgrep:*cors*"]
+# evidencia_pass: no demostrable en análisis estático (ronda 1): semgrep *cors* solo ve el comodín con credenciales (puede dar fail, nunca pass); el pase exige ZAP sobre las respuestas reales (F4/F5). Si se integra ZAP con pase explícito, volver a checks_pass.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-21)"
+
+[[control]]
+id = "SEG-ERRORES"
+titulo = "Errores sin trazas al cliente; sin catch vacíos ni promesas flotantes; fail-closed en auth y pagos"
+alias = ["VC-17", "SEC-22"]
+dominio = "SEG"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "zap"]
+condicion = "siempre"
+bloquea_global = false
+# Ronda 6 (DECISIONES.md #12): rutas_inventario.entorno_expuesto (respuesta que incluye process.env/os.environ completos)
+# va aquí con severidad media: queda visible sin bloquear el global; antes quedaba en sin_mapear.
+mapea_reglas = ["semgrep:vibe-coding.catch-vacio", "check:rutas_inventario.entorno_expuesto"]
+# evidencia_pass: semgrep catch-vacio no acredita que los errores no filtren detalles; solo vale un pase explícito de ZAP (respuestas de error reales).
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-17); investigacion/02-seguridad.md (SEC-22)"
+
+[[control]]
+id = "SEG-LLM-AGENCIA"
+titulo = "Herramientas del agente LLM con mínimo privilegio y confirmación humana; RAG y contenido externo como no confiables"
+alias = ["SEC-32", "SEC-33"]
+dominio = "SEG"
+etapa = "E1"
+gate = "N3"
+severidad_base = "alta"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "llm == true"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-32, SEC-33)"
+
+[[control]]
+id = "SEG-CICD"
+titulo = "Workflows de CI/CD con acciones fijadas a SHA, permisos mínimos y sin pull_request_target inseguro"
+alias = ["SEC-25", "INF-14", "ECO-13"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N3"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["zizmor", "actionlint", "workflows"]
+herramientas_parciales = ["workflows"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["zizmor:*", "actionlint:*", "semgrep:yaml.github-actions.*", "check:workflows.sin_on", "check:workflows.sin_jobs", "check:workflows.job_sin_runs_on", "check:workflows.tabulador", "check:workflows.expresion_mal_cerrada", "check:workflows.runner_obsoleto"]
+# evidencia_pass: zizmor audita cada workflow de GitHub Actions completo (inyección de expresiones, permisos, pinning); exige ≥ 1 workflow (workflows.py es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["zizmor.workflows"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin workflows de CI"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-25); investigacion/04-infra-escalabilidad-carga.md (INF-14); investigacion/07-repos-skills-expertos.md (ECO-13)"
+
+[[control]]
+id = "SEG-SECURITY-TXT"
+titulo = "security.txt (RFC 9116) y canal de reporte de vulnerabilidades"
+alias = ["GAP-50"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N3"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["headers"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere encontrar /.well-known/security.txt válido: pase explícito del sondeo de cabeceras.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-50)"
+
+[[control]]
+id = "SEG-DEPS-CVE-ALTO"
+titulo = "Sin CVE altos en dependencias de producción"
+alias = []
+dominio = "SEG"
+etapa = "E2"
+gate = "N4"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["osv-scanner", "trivy"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["osv:alta/*", "osv:*"]
+# evidencia_pass: osv-scanner sobre lockfile existente cubre el control completo (CVE altas conocidas); exige ≥ 1 lockfile.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["osv-scanner.lockfiles"]
+alcance_excluyente = [{clave = "osv-scanner.lockfiles_confidenciales", motivo = "hay lockfiles en rutas confidenciales (config/confidencial.toml) cuyos resultados se descartan: la ausencia de avisos no los cubre (ronda 4, PV-R3-01)"}]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin lockfile: osv no puede resolver versiones (ver SEG-LOCKFILE)"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "SEG-DEPS-CVE-MEDIO"
+titulo = "Sin CVE de severidad media o baja sin atender en dependencias de producción"
+# Pendiente §6.3 de 10-f0-f1-resultados: la severidad real del aviso (CVSS de osv-scanner o, sin CVSS,
+# database_specific.severity de GHSA: MODERATE/LOW) decide el control; antes caían en CVE-ALTO por el
+# comodín osv:*. Sin alias: ningún ID de los informes 01-08 trata los CVE medios por separado.
+alias = []
+dominio = "SEG"
+etapa = "E2"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["osv-scanner", "trivy"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["osv:media/*", "osv:baja/*"]
+# evidencia_pass: osv-scanner sobre lockfile existente cubre el control completo (CVE medias/bajas conocidas); exige ≥ 1 lockfile.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["osv-scanner.lockfiles"]
+alcance_excluyente = [{clave = "osv-scanner.lockfiles_confidenciales", motivo = "hay lockfiles en rutas confidenciales (config/confidencial.toml) cuyos resultados se descartan: la ausencia de avisos no los cubre (ronda 4, PV-R3-01)"}]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin lockfile: osv no puede resolver versiones (ver SEG-LOCKFILE)"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3 (CVE en dependencias); investigacion/10-f0-f1-resultados.md §6.3; GHSA severity levels (CRITICAL/HIGH/MODERATE/LOW)"
+
+[[control]]
+id = "SEG-DAST-PASIVO"
+titulo = "DAST pasivo sin alertas altas"
+alias = ["SEC-37", "ECO-16"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N4"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["zap"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["zap:*"]
+# evidencia_pass: el control es «sin alertas del escaneo pasivo ZAP»: la ausencia con ≥ 1 URL rastreada es la evidencia.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["zap.urls"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin URL desplegada que sondear"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-37); investigacion/07-repos-skills-expertos.md (ECO-16)"
+
+[[control]]
+id = "SEG-DAST-PLANTILLAS"
+titulo = "DAST por plantillas sin exposición (.git, .env, paneles) ni misconfiguración"
+alias = ["SEC-38"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N4"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["nuclei"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["nuclei:*"]
+# evidencia_pass: el control es «sin coincidencias de plantillas nuclei»: la ausencia con ≥ 1 objetivo escaneado es la evidencia.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["nuclei.urls"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin URL desplegada que sondear"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-38)"
+
+[[control]]
+id = "SEG-SBOM"
+titulo = "SBOM generado y versionado en cada release"
+alias = ["SEC-26"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["syft", "cdxgen", "sbom"]
+herramientas_parciales = ["sbom"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:sbom.sbom_no_versionado"]
+# evidencia_pass: el control exige que exista un SBOM: evidencia positiva (pase explícito), nunca la ausencia de hallazgos.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/02-seguridad.md (SEC-26)"
+
+[[control]]
+id = "SEG-REDTEAM-LLM"
+titulo = "Red teaming automatizado de inyección de prompt y fuga"
+alias = ["SEC-34"]
+dominio = "SEG"
+etapa = "E3"
+gate = "N4"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["promptfoo", "garak"]
+condicion = "llm == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: promptfoo/garak deben reportar la tasa de ataques superados (pase explícito); la ejecución sola no basta.
+evidencia_pass = "checks_pass"
+esfuerzo = "L"
+fuente = "investigacion/02-seguridad.md (SEC-34)"
+
+[[control]]
+id = "SEG-SCORECARD"
+titulo = "OpenSSF Scorecard sobre el umbral acordado y procedencia de build SLSA L2+"
+alias = ["SEC-27", "SEC-28"]
+dominio = "SEG"
+etapa = "E4"
+gate = "N5"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["scorecard", "cosign"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["scorecard:*"]
+# evidencia_pass: OpenSSF Scorecard evalúa todos sus checks sobre el repositorio: sin checks fallidos con ≥ 1 repo evaluado es la evidencia.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["scorecard.repos"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin repositorio remoto que puntuar"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-27, SEC-28)"
+
+[[control]]
+id = "SEG-PENTEST"
+titulo = "Pentest humano o bug bounty antes de escalar con datos sensibles"
+alias = ["SEC-40"]
+dominio = "SEG"
+etapa = "E6"
+gate = "N5"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "investigacion/02-seguridad.md (SEC-40)"
+
+
+# ======================================================================
+# DAT — Datos / BD
+# ======================================================================
+
+[[control]]
+id = "DAT-SQL-CONCATENADO"
+titulo = "Sin SQL concatenado con entrada del usuario"
+alias = ["DB-08"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["semgrep"]
+condicion = "siempre"
+bloquea_global = true
+mapea_reglas = ["semgrep:vibe-coding.sql-concatenado", "semgrep:*sqli*", "semgrep:*sql-injection*", "semgrep:*tainted-sql*"]
+# evidencia_pass: propiedad sintáctica (SQL armado por concatenación/plantilla) que las reglas sqli/tainted-sql + vibe-coding.sql-concatenado buscan directamente; exige ≥ 1 archivo fuente escaneado por semgrep CON consultas SQL (alcance consultas_sql, ronda 1). Sin SQL en el código → no_aplica. Se usa el alcance y no la condición bd == true: con una condición falsa un hallazgo quedaría oculto como no_aplica, mientras que un hallazgo siempre da fail antes de mirar el alcance.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["semgrep.consultas_sql"]
+# Ronda 2: consultas SQL en código sin reglas sqli/tainted-sql en el ruleset cargado (p. ej. FastAPI/psycopg2, sqlite3, Kotlin) bloquean el pass.
+alcance_excluyente = [{clave = "semgrep.consultas_sql_sin_reglas", motivo = "hay consultas SQL en código escaneado sin reglas de inyección SQL en los rulesets cargados (p. ej. Python sin Flask/Django, DB-API directo, Kotlin): la ausencia de hallazgos no lo cubre"}, {clave = "semgrep.fuentes_no_escaneadas", motivo = "hay código de aplicación que semgrep no escaneó (rutas confidenciales o archivos > 2 MB): podría tener consultas SQL y la ausencia de hallazgos no lo cubre (ronda 4, PV-R3-01/04)"}]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin consultas SQL en el código fuente escaneado"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-08)"
+
+
+[[control]]
+id = "DAT-PII-REPO"
+titulo = "Datos personales o de salud versionados en el repositorio"
+# DECISIONES.md #3 (generalizada): carpetas y archivos de config/confidencial.toml. El chequeo usa solo
+# metadatos (git ls-files, lstat); la evidencia es ruta y conteo, nunca contenido.
+alias = []
+dominio = "DAT"
+etapa = "E2"
+gate = "N1"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["datos_confidenciales"]
+condicion = "siempre"
+bloquea_global = true
+mapea_reglas = ["check:datos_confidenciales.trackeado*", "check:datos_confidenciales.no_trackeado", "check:datos_confidenciales.pii_tabular"]
+# Ronda 6 (DECISIONES.md #12): config/confidencial.toml separa carpetas inequívocas (datos-reales, data/raw…: todo su
+# contenido es confidencial) y ambiguas (pacientes, patients: solo los archivos de datos; el código se escanea). Un YAML o
+# JSON es tabular solo con ≥ 2 registros con claves comunes; los correos de dominios reservados (RFC 2606/6761) y los
+# buzones de sistema no cuentan como PII. La PII en carpetas de test o fixture va a DAT-PII-TEST (pii_en_test).
+# Ronda 3 (PV-R2-01): que ningún NOMBRE coincida con los patrones no prueba que no haya datos personales versionados. datos_confidenciales inspecciona además los archivos de datos versionados (CSV/TSV: encabezado y una muestra de filas; JSON/JSONL: claves de los registros) y reporta pii_tabular (crítico) por columnas o valores personales o de salud, sin copiar ningún valor; un archivo de datos binario (xlsx, sav, sqlite…) no inspeccionable impide el pase no_trackeado.
+# evidencia_pass: check propio (datos_confidenciales): pase explícito no_trackeado (ronda 1) solo en un repositorio git y si evaluó ≥ 1 objeto: candidatos confidenciales locales/versionados o, sin candidatos, ≥ 1 archivo versionado contrastado con los patrones. Sin repositorio git → no_aplica (nada está versionado; el control trata del repositorio); repo sin archivos versionados ni candidatos → no_aplica.
+# Ronda 9 (DECISIONES.md #13): detectar PII por patrones nunca es completo (formatos, codificaciones, anidamientos y
+# ofuscaciones siempre dejan huecos), así que la ausencia de hallazgos NO demuestra ausencia de datos personales. El
+# control nunca da pass en análisis estático: sin hallazgos queda no_evaluado («no se detectaron datos personales; no
+# demostrable»). El check sigue emitiendo el pase interno no_trackeado (informativo) y los hallazgos siguen dando fail.
+evidencia_pass = "no_demostrable_estatico"
+motivo_no_demostrable = "sin datos personales detectados; la detección por patrones no es exhaustiva y no lo demuestra (revisión humana)"
+esfuerzo = "S"
+fuente = "DECISIONES.md #3; Ley 19.628 y Ley 20.584 (señal de riesgo, no afirmación de cumplimiento)"
+[[control]]
+id = "DAT-PII-TEST"
+titulo = "Datos con forma de PII en tests o fixtures verificados como ficticios"
+# Ronda 6 (DECISIONES.md #12): datos_confidenciales emite pii_en_test (severidad media) cuando un archivo de test o
+# fixture parece tener datos personales. Sigue visible y sin pase, pero no es crítico ni bloquea el global como
+# DAT-PII-REPO: lo habitual son datos ficticios, y eso lo verifica una persona.
+alias = []
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["datos_confidenciales"]
+condicion = "siempre"
+bloquea_global = false
+# Ronda 7 (DECISIONES.md #12, adenda 2): también pii_no_tabular (media): valores con forma de email real o teléfono en un
+# JSON/YAML versionado (o del historial) que no es lista de registros. Sin este mapeo el normalizador lo descartaría.
+mapea_reglas = ["check:datos_confidenciales.pii_en_test", "check:datos_confidenciales.pii_no_tabular"]
+# evidencia_pass: no_demostrable_estatico. Que el check no vea PII en tests no prueba que los datos sean ficticios, y su pase no_trackeado ya cuenta para DAT-PII-REPO; sin hallazgos queda no_evaluado, nunca pass.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "DECISIONES.md #12 (ronda 6); DECISIONES.md #3; Ley 19.628 (señal de riesgo, no afirmación de cumplimiento)"
+
+[[control]]
+id = "DAT-RLS-ON"
+titulo = "RLS habilitado en todas las tablas expuestas por la API"
+alias = ["VC-01", "SEC-09", "DB-01", "ECO-05"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["splinter", "esquema_resumen", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "baas != 'ninguno'"
+bloquea_global = true
+mapea_reglas = ["splinter:0013*", "check:rls_estatico.rls_deshabilitado", "check:rls_estatico.vista_security_definer"]
+# evidencia_pass: splinter consulta el catálogo de la BD viva (lint 0013): sin hallazgos con ≥ 1 tabla inspeccionada, RLS está activo en todas; rls_estatico es parcial.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-01); investigacion/02-seguridad.md (SEC-09); investigacion/03-bases-de-datos.md (DB-01); investigacion/07-repos-skills-expertos.md (ECO-05)"
+
+[[control]]
+id = "DAT-RLS-PERMISIVA"
+titulo = "Sin políticas USING(true)/WITH CHECK(true) en datos de usuario ni tablas con RLS sin políticas"
+alias = ["VC-02", "DB-02"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["splinter", "revisor-autorizacion", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "baas != 'ninguno'"
+bloquea_global = false
+# Ronda 6 (DECISIONES.md #12): rls_estatico ya no emite rls_sin_politica como hallazgo (RLS activo sin políticas es
+# deny-all, no permisivo). Ronda 7 (adenda 2): lo emite como rls_sin_politicas (info) → DAT-RLS-DENY-ALL. El patrón
+# exacto rls_sin_politica se conserva para crudos de corridas anteriores (no coincide con rls_sin_politicas).
+mapea_reglas = ["splinter:0008*", "splinter:0024*", "check:rls_estatico.rls_sin_politica", "check:rls_estatico.politica_siempre_true"]
+# evidencia_pass: splinter, rls_estatico solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-02); investigacion/03-bases-de-datos.md (DB-02)"
+
+[[control]]
+id = "DAT-RLS-SEMANTICA"
+titulo = "Las políticas RLS reflejan la regla de negocio (propietario, tenant, rol) por comando"
+alias = ["DB-03"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "llm"
+herramientas = ["revisor-autorizacion"]
+condicion = "baas != 'ninguno'"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-autorizacion): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-03)"
+
+[[control]]
+id = "DAT-RLS-METADATA"
+titulo = "RLS no depende de user_metadata"
+alias = ["DB-06"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["splinter", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "baas == 'supabase'"
+bloquea_global = false
+mapea_reglas = ["splinter:0015*", "check:rls_estatico.politica_user_metadata"]
+# evidencia_pass: splinter (lint 0015) revisa todas las políticas en la BD viva: ausencia con ≥ 1 tabla inspeccionada cubre el control.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-06)"
+
+[[control]]
+id = "DAT-RLS-DENY-ALL"
+titulo = "Tablas con RLS activado y sin políticas (deny-all) revisadas como intencionales"
+# Ronda 7 (DECISIONES.md #12, adenda 2): rls_estatico emite rls_sin_politicas (severidad info) cuando una tabla expuesta
+# tiene RLS activo y ninguna política: niega todo acceso vía API a anon/authenticated (solo service_role entra). No es
+# permisivo, así que no va a DAT-RLS-PERMISIVA ni a DAT-RLS-ON; en la ronda 6 quedaba solo en `informativos` del crudo
+# y no llegaba a hallazgos.jsonl ni al informe. Aquí es visible con severidad info, sin bloqueo (bloquea_global = false;
+# no es crítico) y sin pase: gate N4 porque en DAT ese nivel ya exige DAT-RESTORE (manual), así que su fail no baja el
+# nivel demostrado alcanzable en análisis estático. Si la tabla es deny-all a propósito, se descarta como FP verificado.
+alias = []
+dominio = "DAT"
+etapa = "E2"
+gate = "N4"
+severidad_base = "info"
+metodo = "determinista"
+herramientas = ["rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+# Todas sus herramientas son parciales (fallbacks): permitido solo con evidencia_pass = no_demostrable_estatico
+# (test_post_verificacion), que ya garantiza el «nunca pass».
+condicion = "baas != 'ninguno'"
+bloquea_global = false
+mapea_reglas = ["check:rls_estatico.rls_sin_politicas"]
+# evidencia_pass: no_demostrable_estatico. Que las migraciones no muestren tablas deny-all no dice nada de la base viva (cambios del dashboard) ni de la intención; sin hallazgos queda no_evaluado, nunca pass.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "DECISIONES.md #12 (adenda 2); splinter lint 0008 (rls_enabled_no_policy); investigacion/13 §4.15"
+
+[[control]]
+id = "DAT-ANON-NEGATIVA"
+titulo = "Con la clave anon y sin sesión no se lee ni escribe ninguna tabla privada"
+alias = ["VC-03"]
+dominio = "DAT"
+etapa = "E3"
+gate = "N2"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["anon_negativa"]
+condicion = "baas != 'ninguno'"
+bloquea_global = true
+mapea_reglas = ["sonda:anon_negativa*"]
+# evidencia_pass: la sonda anon debe reportar por tabla que la lectura anónima fue rechazada (pase explícito).
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-03)"
+
+[[control]]
+id = "DAT-SECDEF"
+titulo = "Funciones SECURITY DEFINER con search_path fijo y EXECUTE revocado a anon"
+alias = ["DB-07"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["splinter", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "baas == 'supabase'"
+bloquea_global = false
+mapea_reglas = ["splinter:0011*", "splinter:0028*", "splinter:0029*", "splinter:0031*", "check:rls_estatico.secdef_sin_search_path", "check:rls_estatico.secdef_ejecutable_anon"]
+# evidencia_pass: splinter (lints 0011/0028/0029/0031) revisa todas las funciones SECURITY DEFINER de la BD viva; exige ≥ 1 tabla inspeccionada.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-07)"
+
+[[control]]
+id = "DAT-BUCKETS"
+titulo = "Buckets de storage privados por defecto; URLs firmadas para PII"
+alias = ["VC-16"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["esquema_resumen", "revisor-autorizacion"]
+condicion = "baas != 'ninguno'"
+bloquea_global = false
+mapea_reglas = ["check:rls_estatico.bucket_publico"]
+# evidencia_pass: esquema_resumen solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-16)"
+
+[[control]]
+id = "DAT-GRANTS"
+titulo = "Rol de la aplicación con mínimo privilegio; grants a anon mínimos"
+alias = ["DB-22"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["splinter", "esquema_resumen", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["splinter:0002*", "check:rls_estatico.auth_users_expuesto", "check:rls_estatico.grant_anon_amplio"]
+# evidencia_pass: splinter (lint 0002) revisa los grants reales de la BD viva; exige ≥ 1 tabla inspeccionada (rls_estatico es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-22)"
+
+[[control]]
+id = "DAT-ESQUEMA-VERSIONADO"
+titulo = "Esquema versionado: migraciones en el repo y diff vacío contra producción"
+alias = ["DB-09"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["archivos_clave", "supabase", "prisma", "atlas"]
+condicion = "bd == true"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.migraciones*"]
+# evidencia_pass: check propio (archivos_clave, supabase, prisma, atlas): emite un pase explícito (check:archivos_clave.migraciones, solo si hay base de datos y migraciones en el repo); que solo corra no basta. Ronda 1: condición bd == true (sin base de datos no hay esquema que versionar → no_aplica). El diff contra producción no se verifica en estático.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-09)"
+
+[[control]]
+id = "DAT-PK-FK"
+titulo = "Todas las tablas con PK y FK declaradas donde hay relaciones"
+alias = ["DB-12"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["splinter", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["splinter:0004*", "check:rls_estatico.sin_pk"]
+# evidencia_pass: splinter (lint 0004) recorre todas las tablas de la BD viva: sin hallazgos con ≥ 1 tabla, todas tienen PK.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-12)"
+
+[[control]]
+id = "DAT-PII-INVENTARIO"
+titulo = "Datos personales y sensibles identificados, minimizados y no expuestos por la API"
+alias = ["DB-25", "GAP-02"]
+dominio = "DAT"
+etapa = "E1"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["esquema_resumen", "bearer"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["bearer:*", "check:datos_confidenciales.sin_gitignore"]
+# evidencia_pass: un inventario de PII es evidencia positiva (columnas/flujos clasificados por bearer o esquema_resumen); la ausencia de hallazgos no es un inventario.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-25); investigacion/08-vacios-critico.md (GAP-02)"
+
+[[control]]
+id = "DAT-BACKUP"
+titulo = "Backups automáticos activos (PITR según RPO)"
+alias = ["VC-13", "DB-23", "INF-10"]
+dominio = "DAT"
+etapa = "E5"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: depende de la respuesta del creador (entrevista).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-13); investigacion/03-bases-de-datos.md (DB-23); investigacion/04-infra-escalabilidad-carga.md (INF-10)"
+
+[[control]]
+id = "DAT-POOLER"
+titulo = "Pooler de conexiones adecuado al runtime serverless; cliente ORM singleton"
+alias = ["DB-20", "INF-05"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["pooler"]
+condicion = "ssr_serverless == true"
+bloquea_global = false
+mapea_reglas = ["check:pooler.*"]
+# evidencia_pass: check propio (pooler): emite un pase explícito (check:pooler.*…) cuando verifica la condición; que solo corra no basta.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-20); investigacion/04-infra-escalabilidad-carga.md (INF-05)"
+
+[[control]]
+id = "DAT-RLS-TESTS"
+titulo = "Tests automatizados de RLS (usuario A no ve datos de B; anon sin acceso)"
+alias = ["DB-04"]
+dominio = "DAT"
+etapa = "E3"
+gate = "N3"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["pgtap"]
+condicion = "baas != 'ninguno'"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere que existan y pasen pruebas pgTAP de RLS: evidencia positiva.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-04)"
+
+[[control]]
+id = "DAT-MIGRACIONES-SEGURAS"
+titulo = "Migraciones sin locks largos ni operaciones destructivas sin guarda"
+alias = ["VC-14", "DB-10", "ECO-11"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["squawk", "migraciones_sql"]
+herramientas_parciales = ["migraciones_sql"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["squawk:*", "check:migraciones_sql.index_sin_concurrently", "check:migraciones_sql.drop_index_sin_concurrently", "check:migraciones_sql.concurrently_en_transaccion", "check:migraciones_sql.not_null_sin_default", "check:migraciones_sql.set_not_null", "check:migraciones_sql.drop_column", "check:migraciones_sql.drop_table", "check:migraciones_sql.rename", "check:migraciones_sql.cambio_tipo", "check:migraciones_sql.fk_sin_not_valid", "check:migraciones_sql.check_sin_not_valid", "check:migraciones_sql.sin_lock_timeout"]
+# evidencia_pass: squawk analiza cada sentencia de cada migración con su juego completo de reglas de bloqueo; exige ≥ 1 migración (migraciones_sql es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["squawk.migraciones"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin migraciones SQL"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-14); investigacion/03-bases-de-datos.md (DB-10); investigacion/07-repos-skills-expertos.md (ECO-11)"
+
+[[control]]
+id = "DAT-FK-INDICE"
+titulo = "Claves foráneas indexadas"
+alias = ["DB-13"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["splinter", "rls_estatico"]
+herramientas_parciales = ["rls_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["splinter:0001*", "check:rls_estatico.fk_sin_indice"]
+# evidencia_pass: splinter (lint 0001) revisa cada FK de la BD viva; exige ≥ 1 tabla inspeccionada.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-13)"
+
+[[control]]
+id = "DAT-TIPOS"
+titulo = "Tipos y constraints correctos (identity, timestamptz, numeric para dinero, NOT NULL, CHECK, UNIQUE)"
+alias = ["DB-15"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["squawk", "migraciones_sql"]
+herramientas_parciales = ["migraciones_sql"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:migraciones_sql.tipo_timestamp", "check:migraciones_sql.tipo_serial_int", "check:migraciones_sql.tipo_varchar"]
+# evidencia_pass: squawk (prefer-timestamptz, prefer-bigint, prefer-text) revisa los tipos de cada migración; exige ≥ 1 migración.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["squawk.migraciones"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin migraciones SQL"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-15)"
+
+[[control]]
+id = "DAT-MIGRACION-RECONSTRUCCION"
+titulo = "Reconstrucciones de tabla en SQLite revisadas (sin tablas hijas en cascada; índices, triggers y vistas recreados)"
+# Ronda 7 (DECISIONES.md #12, adenda 2): migraciones_sql no informa como destrucción la reconstrucción estándar de
+# SQLite (CREATE nueva → INSERT … SELECT → DROP vieja → RENAME) cuando ninguna migración declara tablas hijas con
+# ON DELETE CASCADE/SET NULL/SET DEFAULT hacia la tabla vieja; si las hay, el DROP sigue en DAT-MIGRACIONES-SEGURAS
+# (drop_table, alta). Aquí queda visible cada reconstrucción omitida (reconstruccion_sqlite, info). Gate N5 y
+# severidad info: no bloquea ni baja el nivel potencial de N1-N4; nunca pasa (que no haya reconstrucciones no prueba
+# nada y migraciones_sql es parcial).
+alias = []
+dominio = "DAT"
+etapa = "E2"
+gate = "N5"
+severidad_base = "info"
+metodo = "determinista"
+herramientas = ["migraciones_sql"]
+herramientas_parciales = ["migraciones_sql"]
+# Todas sus herramientas son parciales (fallbacks): permitido solo con evidencia_pass = no_demostrable_estatico
+# (test_post_verificacion), que ya garantiza el «nunca pass».
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:migraciones_sql.reconstruccion_sqlite"]
+# evidencia_pass: no_demostrable_estatico. Sin reconstrucciones queda no_evaluado, nunca pass.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "DECISIONES.md #12 (adenda 2, ronda 7); documentación de SQLite (ALTER TABLE: procedimiento de 12 pasos; foreign_keys y DROP TABLE)"
+
+[[control]]
+id = "DAT-NORMALIZACION"
+titulo = "Normalización adecuada: sin listas en texto ni entidades duplicadas; JSONB justificado"
+alias = ["DB-14"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "baja"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-14)"
+
+[[control]]
+id = "DAT-TRANSACCIONES"
+titulo = "Operaciones multipaso atómicas (transacción o RPC) e idempotentes"
+alias = ["DB-16"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "alta"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-16)"
+
+[[control]]
+id = "DAT-N+1"
+titulo = "Sin consultas N+1 en endpoints principales"
+alias = ["DB-17"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "pg_stat_statements"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: N+1 es un patrón de ejecución: semgrep no lo cubre y pg_stat_statements requiere la BD viva bajo carga → F4/F5 sonda.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-17)"
+
+[[control]]
+id = "DAT-PAGINACION"
+titulo = "Paginación y límites en listados"
+alias = ["DB-18"]
+dominio = "DAT"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["semgrep:vibe-coding.findmany-sin-take"]
+# evidencia_pass: la regla semgrep findmany-sin-take solo ve Prisma sin take; un SELECT * o pool.query que devuelve todas las filas pasa inadvertido → F3 revisor / F4 sonda con volumen.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-18)"
+
+[[control]]
+id = "DAT-AUDITORIA-ACCESOS"
+titulo = "Log append-only de accesos a datos sensibles y de eventos de autenticación"
+alias = ["DB-26", "GAP-37", "GAP-38"]
+dominio = "DAT"
+etapa = "E5"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["pgaudit"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere evidencia de pgaudit configurado: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-26); investigacion/08-vacios-critico.md (GAP-37, GAP-38)"
+
+[[control]]
+id = "DAT-TIMEOUTS"
+titulo = "statement_timeout e idle_in_transaction_session_timeout por rol de la aplicación"
+alias = ["DB-21"]
+dominio = "DAT"
+etapa = "E5"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["esquema_resumen"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere ver statement_timeout configurado: pase explícito de esquema_resumen.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-21)"
+
+[[control]]
+id = "DAT-RESTORE"
+titulo = "Restauración probada con RTO medido"
+alias = ["DB-24", "GAP-33"]
+dominio = "DAT"
+etapa = "E5"
+gate = "N4"
+severidad_base = "alta"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-24); investigacion/08-vacios-critico.md (GAP-33)"
+
+[[control]]
+id = "DAT-CONSULTAS-LENTAS"
+titulo = "Consultas más lentas revisadas con EXPLAIN (ANALYZE, BUFFERS)"
+alias = ["DB-19"]
+dominio = "DAT"
+etapa = "E6"
+gate = "N4"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["pg_stat_statements", "supabase"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere medición de consultas (pg_stat_statements) bajo umbral: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-19)"
+
+[[control]]
+id = "DAT-HIGIENE"
+titulo = "Higiene de la BD: índices duplicados o no usados, bloat, autovacuum y edad de XID"
+alias = ["DB-27"]
+dominio = "DAT"
+etapa = "E5"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["splinter", "supabase"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["splinter:0005*", "splinter:0009*", "splinter:0020*", "splinter:0030*"]
+# evidencia_pass: splinter (lints 0005/0009/0020/0030) cubre la higiene del esquema vivo; exige ≥ 1 tabla inspeccionada.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["splinter.tablas"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin tablas en el esquema"
+esfuerzo = "S"
+fuente = "investigacion/03-bases-de-datos.md (DB-27)"
+
+[[control]]
+id = "DAT-EXPAND-CONTRACT"
+titulo = "Cambios de esquema incompatibles con patrón expand/contract documentado"
+alias = ["DB-11"]
+dominio = "DAT"
+etapa = "E4"
+gate = "N4"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-11)"
+
+[[control]]
+id = "DAT-ESCALADO"
+titulo = "Plan de escalado de datos: réplicas de lectura, particionamiento y caché"
+alias = ["DB-29"]
+dominio = "DAT"
+etapa = "E6"
+gate = "N5"
+severidad_base = "baja"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "investigacion/03-bases-de-datos.md (DB-29)"
+
+
+# ======================================================================
+# COD — Código e ingeniería
+# ======================================================================
+
+[[control]]
+id = "COD-REPRO"
+titulo = "Repositorio git con arranque reproducible desde el README"
+alias = ["ING-01"]
+dominio = "COD"
+etapa = "E2"
+gate = "N1"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["archivos_clave"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.readme*", "check:archivos_clave.git*"]
+# evidencia_pass: check propio (archivos_clave): emite un pase explícito (check:archivos_clave.readme*…) cuando verifica la condición; que solo corra no basta. Las dos subcondiciones están cubiertas por hallazgos de ausencia (readme_ausente, readme_sin_arranque, git_sin_repo y, ronda 2, git_sin_versionar: dentro de un work tree pero sin ningún archivo del proyecto versionado, p. ej. una carpeta ignorada por el repo padre), así que un pase de una no oculta la falta de la otra.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-01)"
+
+[[control]]
+id = "COD-FLUJOGRAMA"
+titulo = "Flujograma y alcance de la idea conocidos y confirmados por el dueño"
+alias = ["ING-02"]
+dominio = "COD"
+etapa = "E0"
+gate = "N1"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["auditar-perfil"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: sin parte determinista; el resto es juicio de auditar-perfil → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-02)"
+
+[[control]]
+id = "COD-LINT"
+titulo = "Lint sin errores"
+alias = ["ING-04"]
+dominio = "COD"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["eslint", "biome", "ruff"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["lint:*"]
+# evidencia_pass: el control es «lint sin errores con la config del proyecto»: la salida limpia del linter con ≥ 1 archivo analizado es exactamente esa evidencia.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["eslint.archivos", "biome.archivos", "ruff.archivos"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin archivos que el linter analice"
+esfuerzo = "S"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-04)"
+
+[[control]]
+id = "COD-TIPOS"
+titulo = "Typecheck pasa en modo estricto; any y ts-ignore bajo el umbral"
+alias = ["ING-05"]
+dominio = "COD"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["tsc", "pyright", "tipos"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["tsc:*", "check:tipos.error_tsc", "check:tipos.sin_errores"]
+# evidencia_pass: tipos.py emite check:tipos.sin_errores cuando tsc --noEmit termina sin errores: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-05)"
+
+[[control]]
+id = "COD-CRITERIOS"
+titulo = "Historias y criterios de aceptación verificables de los flujos críticos; código coherente con el flujograma"
+alias = ["ING-06", "ECO-17"]
+dominio = "COD"
+etapa = "E0"
+gate = "N2"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["auditar-perfil", "revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (auditar-perfil, revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-06); investigacion/07-repos-skills-expertos.md (ECO-17)"
+
+[[control]]
+id = "COD-CI-BASICO"
+titulo = "CI que corre lint, typecheck y tests en cada push o PR"
+alias = ["ING-07"]
+dominio = "COD"
+etapa = "E4"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["archivos_clave", "actionlint", "workflows"]
+herramientas_parciales = ["workflows"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.ci*", "check:workflows.ci_sin_calidad"]
+# evidencia_pass: pase explícito check:archivos_clave.ci, que (ronda 1) exige que algún `run:` de .github/workflows ejecute lint, typecheck o tests (workflows.calidad_ci); la mera existencia del archivo de CI ya no basta. La comprobación semántica corre siempre, también con actionlint instalado (actionlint solo valida sintaxis). Un CI que no es de GitHub Actions queda no_evaluado (sin verificación semántica).
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-07)"
+
+[[control]]
+id = "COD-TESTS-HUMO"
+titulo = "Tests de humo de los flujos críticos"
+alias = []
+dominio = "COD"
+etapa = "E3"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["vitest", "jest", "pytest", "archivos_clave"]
+condicion = "siempre"
+bloquea_global = false
+# Solo la AUSENCIA de tests decide (fail). Que existan archivos de test no prueba que pasen:
+# el pase lo darán vitest/jest/pytest en una fase posterior.
+mapea_reglas = ["check:archivos_clave.tests_ausentes"]
+# evidencia_pass: no demostrable en análisis estático (ronda 1): que existan archivos de test no prueba que haya tests de humo de los flujos críticos ni que pasen; el pase lo dará un runner (vitest/jest/pytest) en una fase posterior. archivos_clave solo aporta el fail (tests_ausentes).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "COD-DOC-AGENTE"
+titulo = "README de arranque en 5 pasos o menos y CLAUDE.md/AGENTS.md con la arquitectura"
+alias = ["GAP-42"]
+dominio = "COD"
+etapa = "E1"
+gate = "N2"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["archivos_clave"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.doc_agente*", "check:archivos_clave.doc_agente", "check:archivos_clave.doc_agente_readme"]
+# evidencia_pass: check propio (archivos_clave). Ronda 2: el título exige README de arranque Y documentación para agentes con contenido; pases_requeridos pide los dos (AND): doc_agente (documento con contenido) y doc_agente_readme (archivos_clave lo emite junto con el pase readme de COD-REPRO). Un CLAUDE.md/AGENTS.md vacío emite doc_agente_vacio y no da pase. Que el documento describa la arquitectura no se verifica en estático (control mixto).
+pases_requeridos = ["check:archivos_clave.doc_agente", "check:archivos_clave.doc_agente_readme"]
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-42)"
+
+[[control]]
+id = "COD-COBERTURA"
+titulo = "Cobertura de tests sobre el umbral global y en código nuevo"
+alias = ["ING-09"]
+dominio = "COD"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["vitest", "jest", "pytest-cov"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["coverage:*"]
+# evidencia_pass: cobertura con umbral: requiere el porcentaje medido (pase explícito), no la ausencia de hallazgos.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-09)"
+
+[[control]]
+id = "COD-AUTHZ-TESTS"
+titulo = "Suite de tests en CI que cubre las rutas de autorización"
+alias = ["VC-18"]
+dominio = "COD"
+etapa = "E3"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["vitest", "jest", "pytest", "revisor-autorizacion"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: vitest, jest, pytest solo cubre una parte del control; el resto es juicio de revisor-autorizacion → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-18)"
+
+[[control]]
+id = "COD-DUPLICACION"
+titulo = "Duplicación de código bajo el umbral"
+alias = ["VC-19", "ING-10"]
+dominio = "COD"
+etapa = "E2"
+gate = "N3"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["jscpd", "duplicacion"]
+herramientas_parciales = ["duplicacion"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["jscpd:*", "check:duplicacion.porcentaje_global", "check:duplicacion.bloque_duplicado"]
+# evidencia_pass: duplicación con umbral global: requiere el porcentaje medido de jscpd (pase explícito); duplicacion.py es parcial.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-19); investigacion/06-ingenieria-software-ciclo.md (ING-10)"
+
+[[control]]
+id = "COD-COMPLEJIDAD"
+titulo = "Complejidad por función y tamaño de archivos bajo el umbral"
+alias = ["ING-11", "GAP-46"]
+dominio = "COD"
+etapa = "E2"
+gate = "N3"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["lizard", "radon", "complejidad"]
+herramientas_parciales = ["complejidad"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["lizard:*", "check:complejidad.ccn_alta", "check:complejidad.archivo_grande", "check:complejidad.funcion_larga"]
+# evidencia_pass: lizard/radon miden CCN y longitud de todas las funciones: sin superar umbrales con ≥ 1 función medida es la evidencia (complejidad.py es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["lizard.funciones", "radon.funciones"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin funciones que medir"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-11); investigacion/08-vacios-critico.md (GAP-46)"
+
+[[control]]
+id = "COD-CICLOS-MUERTO"
+titulo = "Sin ciclos de dependencias ni código muerto relevante"
+alias = ["ING-12"]
+dominio = "COD"
+etapa = "E2"
+gate = "N3"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["knip", "madge", "vulture", "deps_muertas"]
+herramientas_parciales = ["deps_muertas"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["knip:*", "madge:*", "check:deps_muertas.dep_sin_uso", "check:deps_muertas.dep_no_declarada", "check:deps_muertas.devdep_sin_uso"]
+# evidencia_pass: knip/madge/vulture construyen el grafo completo de módulos: sin ciclos ni código muerto con ≥ 1 módulo analizado cubre el control (deps_muertas es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["knip.archivos", "madge.archivos", "vulture.archivos"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin módulos que analizar"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-12)"
+
+[[control]]
+id = "COD-ADR-C4"
+titulo = "ADRs y diagramas C4 de niveles 1-2"
+alias = ["ING-13"]
+dominio = "COD"
+etapa = "E1"
+gate = "N3"
+severidad_base = "baja"
+metodo = "mixto"
+herramientas = ["archivos_clave", "revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: archivos_clave solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-13)"
+
+[[control]]
+id = "COD-RAMA-PROTEGIDA"
+titulo = "Rama principal protegida y PR con revisión"
+alias = ["ING-15"]
+dominio = "COD"
+etapa = "E4"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["gh"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere consultar la protección de rama en GitHub (gh): pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-15)"
+
+[[control]]
+id = "COD-LICENCIAS"
+titulo = "Licencias de dependencias, código y assets compatibles con el modelo de distribución"
+alias = ["GAP-39", "GAP-40", "GAP-41"]
+dominio = "COD"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["syft", "cdxgen", "scancode", "sbom"]
+herramientas_parciales = ["sbom"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:sbom.licencia_copyleft", "check:sbom.licencia_desconocida", "check:sbom.proyecto_sin_licencia"]
+# evidencia_pass: con el inventario completo (syft/cdxgen/scancode) la ausencia de licencias copyleft/desconocidas es evidencia; exige ≥ 1 componente (sbom.py es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["syft.componentes", "cdxgen.componentes", "scancode.archivos"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin componentes inventariados"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-39, GAP-40, GAP-41)"
+
+[[control]]
+id = "COD-MUTACION"
+titulo = "Mutation score sobre el umbral en módulos críticos"
+alias = ["ING-17"]
+dominio = "COD"
+etapa = "E3"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["stryker", "mutmut"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere puntaje de mutación medido: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "L"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-17)"
+
+[[control]]
+id = "COD-E2E-TRAZA"
+titulo = "Tests E2E de flujos críticos con trazabilidad requisito a prueba"
+alias = ["ING-18"]
+dominio = "COD"
+etapa = "E3"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["playwright"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere pruebas e2e que existan y pasen: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "L"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-18)"
+
+[[control]]
+id = "COD-RELEASE"
+titulo = "Release semver automatizado con changelog"
+alias = ["ING-19"]
+dominio = "COD"
+etapa = "E4"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["semantic-release", "release-please"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere versionado automático configurado: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-19)"
+
+[[control]]
+id = "COD-DORA"
+titulo = "Métricas DORA con tendencia"
+alias = ["ING-21"]
+dominio = "COD"
+etapa = "E6"
+gate = "N5"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["gh"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere métricas DORA medidas: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-21)"
+
+
+# ======================================================================
+# UX — Usabilidad y frontend
+# ======================================================================
+
+[[control]]
+id = "UX-FLUJO-FELIZ"
+titulo = "El flujo feliz principal funciona en un navegador de escritorio (diagnóstico)"
+alias = []
+dominio = "UX"
+etapa = "E3"
+gate = "N1"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["playwright_ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere completar el recorrido principal en navegador: pase explícito de playwright_ux.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "UX-A11Y-ESTATICA"
+titulo = "Sin divs clicables, imágenes sin alt ni inputs sin label en el código"
+alias = ["UX-03"]
+dominio = "UX"
+etapa = "E2"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["eslint-plugin-jsx-a11y"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["lint:jsx-a11y/*"]
+# evidencia_pass: el control es «sin errores de jsx-a11y»: salida limpia del plugin con ≥ 1 archivo JSX analizado.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["eslint-plugin-jsx-a11y.archivos"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin componentes JSX"
+esfuerzo = "S"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-03)"
+
+[[control]]
+id = "UX-AXE-CRIT"
+titulo = "0 violaciones axe critical en flujos críticos"
+alias = ["UX-01", "ECO-14"]
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "critica"
+metodo = "determinista"
+herramientas = ["playwright_ux", "axe", "ux_estatico"]
+herramientas_parciales = ["ux_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["axe:critical/*", "check:ux_estatico.img_sin_alt"]
+# evidencia_pass: axe evalúa el DOM renderizado completo: cero violaciones critical con ≥ 1 página analizada es la evidencia (ux_estatico es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["playwright_ux.paginas", "axe.paginas"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin páginas renderizadas"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-01); investigacion/07-repos-skills-expertos.md (ECO-14)"
+
+[[control]]
+id = "UX-REFLOW"
+titulo = "Sin scroll horizontal a 360, 768 y 1280 px"
+alias = ["UX-07"]
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["playwright_ux", "ux_estatico"]
+herramientas_parciales = ["ux_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["playwright:reflow*", "check:ux_estatico.sin_viewport"]
+# evidencia_pass: playwright mide el scroll horizontal a 320 px en cada página visitada; exige ≥ 1 página (ux_estatico es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["playwright_ux.paginas"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin páginas renderizadas"
+esfuerzo = "S"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-07)"
+
+[[control]]
+id = "UX-ESTADOS"
+titulo = "Estados de carga, vacío y error ante fallos de red forzados"
+alias = ["UX-08"]
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["playwright_ux", "revisor-ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["playwright:estados*"]
+# evidencia_pass: playwright_ux solo cubre una parte del control; el resto es juicio de revisor-ux → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-08)"
+
+[[control]]
+id = "UX-ERRORES-VISIBLES"
+titulo = "Sin errores técnicos visibles al usuario ni errores de consola"
+alias = ["UX-09"]
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["playwright_ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["playwright:consola*"]
+# evidencia_pass: playwright captura toda la consola durante el recorrido: sin errores con ≥ 1 página visitada es la evidencia.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["playwright_ux.paginas"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin páginas renderizadas"
+esfuerzo = "S"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-09)"
+
+[[control]]
+id = "UX-FORMULARIOS"
+titulo = "Formularios con labels, autocomplete y errores asociados y anunciados"
+alias = ["UX-10"]
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["axe", "playwright_ux", "revisor-ux", "ux_estatico"]
+herramientas_parciales = ["ux_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:ux_estatico.input_sin_label"]
+# evidencia_pass: axe, playwright_ux, ux_estatico solo cubre una parte del control; el resto es juicio de revisor-ux → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-10)"
+
+[[control]]
+id = "UX-LANG"
+titulo = "Atributo lang presente en html"
+alias = []
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["axe", "ux_estatico"]
+herramientas_parciales = ["ux_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["axe:*/html-has-lang", "check:ux_estatico.html_sin_lang"]
+# evidencia_pass: axe html-has-lang sobre el documento renderizado cubre el control; exige ≥ 1 página (ux_estatico es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["axe.paginas"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin páginas renderizadas"
+esfuerzo = "S"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "UX-HEURISTICA"
+titulo = "Evaluación heurística de Nielsen (severidad 0-4) realizada sobre capturas; requiere verificación humana"
+alias = ["UX-16"]
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["revisor-ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-ux): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-16)"
+
+[[control]]
+id = "UX-FECHAS"
+titulo = "Fechas almacenadas en UTC y mostradas en la zona horaria del usuario"
+alias = ["GAP-51"]
+dominio = "UX"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-51)"
+
+[[control]]
+id = "UX-LCP-LAB"
+titulo = "LCP de laboratorio en móvil menor a 4 s"
+alias = []
+dominio = "UX"
+etapa = "E3"
+gate = "N2"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["lighthouse"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["lighthouse:largest-contentful-paint"]
+# evidencia_pass: métrica con umbral (LCP < 4 s): solo un pase explícito de Lighthouse con el valor medido.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "UX-AXE-SERIOUS"
+titulo = "0 violaciones axe serious"
+alias = ["UX-02"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["axe", "pa11y-ci"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["axe:serious/*"]
+# evidencia_pass: axe/pa11y evalúan el DOM completo: cero violaciones serious con ≥ 1 página analizada es la evidencia.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["axe.paginas", "pa11y-ci.paginas"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin páginas renderizadas"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-02)"
+
+[[control]]
+id = "UX-TECLADO"
+titulo = "Flujo crítico completable solo con teclado; foco visible; modales con trampa de foco y Esc"
+alias = ["UX-04"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["playwright_ux", "revisor-ux", "ux_estatico"]
+herramientas_parciales = ["ux_estatico"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:ux_estatico.click_en_div", "check:ux_estatico.tabindex_positivo", "check:ux_estatico.outline_none"]
+# evidencia_pass: playwright_ux, ux_estatico solo cubre una parte del control; el resto es juicio de revisor-ux → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-04)"
+
+[[control]]
+id = "UX-TACTIL"
+titulo = "Objetivos táctiles de al menos 24x24 px CSS (WCAG 2.5.8)"
+alias = ["UX-05"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["playwright_ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["playwright:tactil*"]
+# evidencia_pass: playwright mide todos los objetivos táctiles de cada página visitada; exige ≥ 1 página.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["playwright_ux.paginas"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin páginas renderizadas"
+esfuerzo = "S"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-05)"
+
+[[control]]
+id = "UX-FOCO-OCULTO"
+titulo = "Foco no oculto por elementos fijos (WCAG 2.4.11)"
+alias = ["UX-06"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["playwright_ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere medir el foco visible en navegador: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-06)"
+
+[[control]]
+id = "UX-LIGHTHOUSE"
+titulo = "Lighthouse móvil (mediana de 3) sobre los umbrales de accesibilidad y rendimiento"
+alias = ["UX-11"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["lighthouse", "presupuesto_build"]
+herramientas_parciales = ["presupuesto_build"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["lighthouse:*", "check:presupuesto_build.chunk_grande", "check:presupuesto_build.imagen_grande"]
+# evidencia_pass: puntajes con umbral: solo un pase explícito de Lighthouse; presupuesto_build es parcial.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-11)"
+
+[[control]]
+id = "UX-NAVEGADORES"
+titulo = "Sin APIs no soportadas por browserslist; E2E en chromium, webkit y firefox"
+alias = ["UX-13"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["eslint-plugin-compat", "playwright"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["lint:compat/*"]
+# evidencia_pass: eslint-plugin-compat contrasta cada API usada con el browserslist: salida limpia con ≥ 1 archivo analizado cubre el control.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["eslint-plugin-compat.archivos"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin código de cliente"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-13)"
+
+[[control]]
+id = "UX-CONSENTIMIENTO"
+titulo = "Scripts de terceros no se cargan antes del consentimiento"
+alias = ["GAP-48"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["playwright_ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere verificar el banner/consentimiento en navegador: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-48)"
+
+[[control]]
+id = "UX-SW-PWA"
+titulo = "Manifest y service worker válidos; el SW no cachea respuestas autenticadas"
+alias = ["GAP-18"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["playwright_ux", "revisor-ux"]
+condicion = "pwa == true"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: playwright_ux solo cubre una parte del control; el resto es juicio de revisor-ux → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-18)"
+
+[[control]]
+id = "UX-SUS-MEDIDO"
+titulo = "SUS medido con al menos 5 usuarios por perfil e IC95 %"
+alias = ["UX-17"]
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "media"
+metodo = "manual"
+herramientas = ["auditar-sus"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-17)"
+
+[[control]]
+id = "UX-HEURISTICA-SEV4"
+titulo = "Evaluación heurística sin problemas de severidad 4"
+alias = []
+dominio = "UX"
+etapa = "E3"
+gate = "N3"
+severidad_base = "alta"
+metodo = "llm"
+herramientas = ["revisor-ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-ux): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "UX-CWV-CAMPO"
+titulo = "Core Web Vitals de campo p75: LCP <= 2,5 s, INP <= 200 ms, CLS <= 0,1"
+alias = ["UX-12"]
+dominio = "UX"
+etapa = "E5"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["web-vitals"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere datos de campo (web-vitals) bajo umbral: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "L"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-12)"
+
+[[control]]
+id = "UX-SUS-68"
+titulo = "SUS promedio >= 68 con usuarios reales"
+alias = []
+dominio = "UX"
+etapa = "E5"
+gate = "N4"
+severidad_base = "media"
+metodo = "manual"
+herramientas = ["auditar-sus"]
+condicion = "siempre"
+# DECISIONES.md #5: exigido en N4 sin condición (también herramientas internas); sin datos SUS → manual_pendiente.
+exigido_sin_condicion = true
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "UX-TOKENS"
+titulo = "Colores y espaciados desde design tokens únicos"
+alias = ["UX-15"]
+dominio = "UX"
+etapa = "E2"
+gate = "N4"
+severidad_base = "baja"
+metodo = "mixto"
+herramientas = ["stylelint", "revisor-ux"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: stylelint solo cubre una parte del control; el resto es juicio de revisor-ux → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-15)"
+
+[[control]]
+id = "UX-LECTOR-PANTALLA"
+titulo = "Revisión manual con lector de pantalla y criterios WCAG 2.2 no automatizables"
+alias = ["UX-19"]
+dominio = "UX"
+etapa = "E3"
+gate = "N4"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-19)"
+
+[[control]]
+id = "UX-I18N"
+titulo = "Claves de internacionalización completas; sin textos hardcodeados"
+alias = ["UX-14"]
+dominio = "UX"
+etapa = "E2"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["i18next-cli"]
+condicion = "multi_idioma == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere que i18next-cli confirme claves completas: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-14)"
+
+[[control]]
+id = "UX-REGRESION"
+titulo = "Regresión visual y de accesibilidad en cada PR; presupuestos de rendimiento por ruta"
+alias = ["UX-20"]
+dominio = "UX"
+etapa = "E4"
+gate = "N5"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["playwright", "lighthouse"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere suite de regresión visual/rendimiento que exista y pase: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-20)"
+
+[[control]]
+id = "UX-UMUX"
+titulo = "UMUX-Lite continuo en la aplicación"
+alias = ["UX-18"]
+dominio = "UX"
+etapa = "E5"
+gate = "N5"
+severidad_base = "baja"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/05-usabilidad-ux-frontend.md (UX-18)"
+
+
+# ======================================================================
+# INF — Infraestructura y despliegue
+# ======================================================================
+
+[[control]]
+id = "INF-INVENTARIO"
+titulo = "Stack y plataforma de despliegue detectados"
+alias = ["INF-01", "ECO-01"]
+dominio = "INF"
+etapa = "E1"
+gate = "N1"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["detectar_stack"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["detectar_stack:inventario"]
+# evidencia_pass: el inventario ES la salida de detectar_stack: estado.py agrega el pase explícito detectar_stack:inventario cuando perfil_tecnico.json existe y (ronda 1) detectó ≥ 1 lenguaje o framework; un inventario vacío no pasa. Ronda 3 (PV-R2-08): el título pide también la plataforma de despliegue: el pase exige además ≥ 1 plataforma detectada (perfil_tecnico.plataformas_despliegue: vercel, netlify, fly, render, railway, heroku, cloudflare, contenedor, kubernetes, IaC…); un run.sh o una carpeta de tests sola no pasan.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-01); investigacion/07-repos-skills-expertos.md (ECO-01)"
+
+[[control]]
+id = "INF-PLATAFORMA"
+titulo = "Plataforma diagnosticada con el árbol de decisión de infraestructura"
+alias = ["INF-02"]
+dominio = "INF"
+etapa = "E1"
+gate = "N1"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-02)"
+
+[[control]]
+id = "INF-ENTORNOS"
+titulo = "Previews y staging sin claves ni BD de producción"
+alias = ["GAP-36"]
+dominio = "INF"
+etapa = "E4"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: sin parte determinista; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-36)"
+
+[[control]]
+id = "INF-TAREAS-LARGAS"
+titulo = "Tareas largas fuera del request (cola o workflow); maxDuration coherente"
+alias = ["INF-06"]
+dominio = "INF"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-arquitectura"]
+condicion = "ssr_serverless == true"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-06)"
+
+[[control]]
+id = "INF-TIMEOUTS-SALIDA"
+titulo = "Timeouts explícitos en llamadas salientes"
+alias = ["INF-07"]
+dominio = "INF"
+etapa = "E2"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["semgrep"]
+condicion = "servidor == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: semgrep no tiene reglas que acrediten timeout en toda llamada saliente (pase vacío en AUD-INF): solo vale un pase explícito en checks_pass; sin él, no_evaluado.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-07)"
+
+[[control]]
+id = "INF-DOCKERFILE"
+titulo = "Dockerfile sin latest ni root, multi-stage y sin secretos"
+alias = ["INF-13"]
+dominio = "INF"
+etapa = "E4"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["hadolint", "trivy", "dockerfile"]
+herramientas_parciales = ["dockerfile"]
+condicion = "docker == true"
+bloquea_global = false
+mapea_reglas = ["hadolint:*", "check:dockerfile.tag_latest", "check:dockerfile.usuario_root", "check:dockerfile.sudo", "check:dockerfile.add_vs_copy", "check:dockerfile.add_url", "check:dockerfile.cmd_shell_form", "check:dockerfile.apt_sin_pin", "check:dockerfile.apk_sin_pin", "check:dockerfile.pip_sin_pin", "check:dockerfile.curl_pipe_sh", "check:dockerfile.sin_multistage", "check:dockerfile.copy_todo_sin_dockerignore"]
+# evidencia_pass: hadolint/trivy aplican su juego completo de reglas a cada Dockerfile; exige ≥ 1 Dockerfile (dockerfile.py es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["hadolint.dockerfiles", "trivy.dockerfiles"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin Dockerfile"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-13)"
+
+[[control]]
+id = "INF-EMAIL-DNS"
+titulo = "SPF, DKIM y DMARC válidos y alineados en el dominio remitente"
+alias = ["GAP-14"]
+dominio = "INF"
+etapa = "E4"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["checkdmarc"]
+condicion = "emails == true"
+bloquea_global = false
+mapea_reglas = ["checkdmarc:*"]
+# evidencia_pass: checkdmarc valida SPF/DKIM/DMARC del dominio completo; exige ≥ 1 dominio consultado.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["checkdmarc.dominios"]
+sin_alcance = "no_evaluado"
+motivo_sin_alcance = "sin dominio de correo declarado"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-14)"
+
+[[control]]
+id = "INF-ENTORNOS-SEPARADOS"
+titulo = "Entornos dev y prod separados (BD y claves distintas)"
+alias = ["VC-12"]
+dominio = "INF"
+etapa = "E4"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: sin parte determinista; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-12)"
+
+[[control]]
+id = "INF-SIN-ESTADO"
+titulo = "Procesos sin estado local (12-Factor 3, 6, 9 y 11)"
+alias = ["INF-15", "INF-30"]
+dominio = "INF"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-15, INF-30)"
+
+[[control]]
+id = "INF-CACHE-CDN"
+titulo = "Cabeceras Cache-Control en assets y rutas cacheables; CDN"
+alias = ["INF-18"]
+dominio = "INF"
+etapa = "E4"
+gate = "N3"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["headers", "lighthouse"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere ver cabeceras de caché/CDN en respuestas reales: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-18)"
+
+[[control]]
+id = "INF-REGION"
+titulo = "Región del cómputo igual a la región de la BD"
+alias = ["INF-19"]
+dominio = "INF"
+etapa = "E4"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["detectar_stack"]
+condicion = "servidor == true and bd == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: la región del despliegue debe constar en la configuración: pase explícito; que detectar_stack corra no la demuestra.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-19)"
+
+[[control]]
+id = "INF-EMAIL-ASYNC"
+titulo = "Envío de email asíncrono con reintento, entorno de prueba y unsubscribe RFC 8058"
+alias = ["GAP-15", "GAP-17"]
+dominio = "INF"
+etapa = "E2"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "revisor-arquitectura"]
+condicion = "emails == true"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: semgrep solo cubre una parte del control; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-15, GAP-17)"
+
+[[control]]
+id = "INF-MOVIL"
+titulo = "App móvil sin secretos embebidos ni cleartext; MASVS-L1"
+alias = ["GAP-19"]
+dominio = "INF"
+etapa = "E2"
+gate = "N3"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["mobsf"]
+condicion = "movil == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: MobSF debe reportar su puntaje de seguridad: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-19)"
+
+[[control]]
+id = "INF-PLATAFORMA-CUMPLIDA"
+titulo = "Plataforma adecuada según el árbol de decisión de infraestructura"
+alias = []
+dominio = "INF"
+etapa = "E4"
+gate = "N3"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "INF-IAC"
+titulo = "IaC sin misconfiguraciones críticas"
+alias = ["SEC-24", "INF-21", "ECO-12"]
+dominio = "INF"
+etapa = "E4"
+gate = "N4"
+severidad_base = "alta"
+metodo = "determinista"
+herramientas = ["trivy", "checkov", "iac"]
+herramientas_parciales = ["iac"]
+condicion = "iac == true"
+bloquea_global = false
+mapea_reglas = ["checkov:*", "trivy-config:*", "check:iac.tf_ingreso_abierto", "check:iac.tf_bucket_publico", "check:iac.tf_sin_cifrado", "check:iac.tf_bd_publica", "check:iac.k8s_privilegiado", "check:iac.k8s_host", "check:iac.k8s_sin_nonroot", "check:iac.k8s_sin_limites", "check:iac.k8s_latest", "check:iac.compose_puerto_bd"]
+# evidencia_pass: checkov/trivy config aplican sus políticas a cada recurso IaC; exige ≥ 1 archivo IaC (iac.py es parcial).
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["checkov.archivos", "trivy.archivos"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin archivos IaC"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-24); investigacion/04-infra-escalabilidad-carga.md (INF-21); investigacion/07-repos-skills-expertos.md (ECO-12)"
+
+[[control]]
+id = "INF-K8S"
+titulo = "Manifiestos Kubernetes con requests/limits, probes y no-root"
+alias = ["INF-22"]
+dominio = "INF"
+etapa = "E4"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["kube-linter", "kubeconform"]
+condicion = "k8s == true"
+bloquea_global = false
+mapea_reglas = ["kube-linter:*"]
+# evidencia_pass: kube-linter revisa cada manifiesto con su juego completo de checks; exige ≥ 1 manifiesto.
+evidencia_pass = "ausencia_suficiente"
+alcance_requerido = ["kube-linter.manifiestos", "kubeconform.manifiestos"]
+sin_alcance = "no_aplica"
+motivo_sin_alcance = "sin manifiestos Kubernetes"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-22)"
+
+[[control]]
+id = "INF-ROLLBACK"
+titulo = "Despliegue sin downtime, rollback probado y al menos 2 réplicas"
+alias = ["INF-26"]
+dominio = "INF"
+etapa = "E4"
+gate = "N4"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: sin parte determinista; el resto es juicio de revisor-arquitectura → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-26)"
+
+[[control]]
+id = "INF-IAC-REPRO"
+titulo = "Infraestructura reproducible como código (sin click-ops)"
+alias = ["INF-27"]
+dominio = "INF"
+etapa = "E4"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["detectar_stack"]
+condicion = "servidor == true or bd == true or iac == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere IaC que reproduzca el entorno: evidencia positiva (pase explícito).
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-27)"
+
+
+# ======================================================================
+# ESC — Escala y carga
+# ======================================================================
+
+[[control]]
+id = "ESC-SMOKE"
+titulo = "Prueba de carga smoke dentro de los thresholds"
+alias = ["INF-12"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["k6"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["k6:smoke*"]
+# evidencia_pass: umbrales k6 (errores y latencia): solo un pase explícito del escenario smoke.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-12)"
+
+[[control]]
+id = "ESC-LLM-TOPE"
+titulo = "Tope de gasto en el proveedor LLM, cuota por usuario y max_tokens"
+alias = ["GAP-20"]
+dominio = "ESC"
+etapa = "E5"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["semgrep", "entrevista"]
+condicion = "llm == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: depende de la respuesta del creador (entrevista); semgrep solo aporta contexto.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-20)"
+
+[[control]]
+id = "ESC-PRESUPUESTO"
+titulo = "Alertas de presupuesto o tope de gasto en nube y BaaS"
+alias = ["INF-11"]
+dominio = "ESC"
+etapa = "E5"
+gate = "N2"
+severidad_base = "media"
+metodo = "manual"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-11)"
+
+[[control]]
+id = "ESC-CARGA-PROMEDIO"
+titulo = "Carga promedio dentro de los thresholds del SLO"
+alias = []
+dominio = "ESC"
+etapa = "E6"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["k6"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["k6:promedio*"]
+# evidencia_pass: umbrales k6: solo un pase explícito del escenario de carga promedio.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "PLAN_MAESTRO.md §4.3"
+
+[[control]]
+id = "ESC-BREAKPOINT"
+titulo = "Prueba breakpoint: lambda max, concurrencia estimada y cuello de botella (USE)"
+alias = ["INF-20"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["k6"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["k6:breakpoint*"]
+# evidencia_pass: umbrales k6: solo un pase explícito del escenario breakpoint.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-20)"
+
+[[control]]
+id = "ESC-SLO"
+titulo = "SLO y SLI definidos y documentados"
+alias = ["INF-16"]
+dominio = "ESC"
+etapa = "E5"
+gate = "N3"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-16)"
+
+[[control]]
+id = "ESC-COSTO-UNITARIO"
+titulo = "Costo por usuario activo (LLM e infraestructura) frente al ingreso"
+alias = ["GAP-21"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["infracost"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere el costo calculado (infracost): pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-21)"
+
+[[control]]
+id = "ESC-SOAK-SPIKE"
+titulo = "Pruebas soak (fugas) y spike (autoscaling y cold start)"
+alias = ["INF-25"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["k6"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["k6:soak*", "k6:spike*"]
+# evidencia_pass: umbrales k6: solo un pase explícito de los escenarios soak y spike.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-25)"
+
+[[control]]
+id = "ESC-COSTO-VIRAL"
+titulo = "Modelo de costos en escenario viral"
+alias = ["INF-28"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N4"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["infracost"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere el costo del escenario viral calculado: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-28)"
+
+[[control]]
+id = "ESC-VOLUMEN-REALISTA"
+titulo = "Prueba de carga con datos de volumen realista (seed escalado)"
+alias = ["DB-30"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N4"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["k6", "pgbench"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere carga con volumen realista medida: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/03-bases-de-datos.md (DB-30)"
+
+[[control]]
+id = "ESC-CAPACIDAD"
+titulo = "Capacity planning periódico, simulacros DR/chaos y multi-región"
+alias = ["INF-29"]
+dominio = "ESC"
+etapa = "E6"
+gate = "N5"
+severidad_base = "baja"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-29)"
+
+
+# ======================================================================
+# OPS — Operación, continuidad y legal
+# ======================================================================
+
+[[control]]
+id = "OPS-PERFIL-RIESGO"
+titulo = "Perfil de riesgo generado (salud, pagos, emails, móvil, LLM, UE, menores)"
+alias = ["GAP-00"]
+dominio = "OPS"
+etapa = "E0"
+gate = "N1"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["detectar_stack", "auditar-perfil"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: detectar_stack solo cubre una parte del control; el resto es juicio de auditar-perfil → F3 (sus hallazgos siguen dando fail).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-00)"
+
+[[control]]
+id = "OPS-CUENTAS"
+titulo = "Titular de cada cuenta crítica (hosting, BD, dominio) identificado"
+alias = ["GAP-26"]
+dominio = "OPS"
+etapa = "E0"
+gate = "N1"
+severidad_base = "alta"
+metodo = "manual"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-26)"
+
+[[control]]
+id = "OPS-CUENTAS-EFECTIVO"
+titulo = "Dueño del negocio titular efectivo de SaaS, dominio y DNS, con autorrenovación"
+alias = ["GAP-27"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N2"
+severidad_base = "alta"
+metodo = "manual"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-27)"
+
+[[control]]
+id = "OPS-PLAN-GRATIS"
+titulo = "Límites del plan gratuito conocidos (pausa por inactividad, cuotas)"
+alias = ["GAP-28"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N2"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: depende de la respuesta del creador (entrevista).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-28)"
+
+[[control]]
+id = "OPS-ERROR-TRACKING"
+titulo = "Error tracking instalado (Sentry o equivalente)"
+alias = ["INF-08"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["archivos_clave"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.error_tracking*"]
+# evidencia_pass: check propio (archivos_clave): emite un pase explícito (check:archivos_clave.error_tracking*…) cuando verifica la condición; que solo corra no basta.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-08)"
+
+[[control]]
+id = "OPS-HEALTH"
+titulo = "Endpoint de health check"
+alias = ["INF-09"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N2"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["archivos_clave"]
+condicion = "servidor == true"
+bloquea_global = false
+mapea_reglas = ["check:archivos_clave.health*"]
+exige_checks_pass = true
+# evidencia_pass: requiere encontrar un endpoint de salud: archivos_clave emite el pase explícito check:archivos_clave.health.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-09)"
+
+[[control]]
+id = "OPS-PRIVACIDAD"
+titulo = "Política de privacidad publicada y coherente con los SDK y la recolección real"
+alias = ["GAP-05"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N2"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["bearer", "revisor-arquitectura"]
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-05)"
+
+[[control]]
+id = "OPS-LEY-VIGENCIA"
+titulo = "Vigencia de la Ley 21.719 verificada en BCN a la fecha de la auditoría"
+alias = ["GAP-08"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N2"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-08)"
+
+[[control]]
+id = "OPS-LLM-PII"
+titulo = "Sin PII ni datos de salud enviados al LLM sin anonimizar ni base legal"
+alias = ["GAP-24"]
+dominio = "OPS"
+etapa = "E2"
+gate = "N2"
+severidad_base = "critica"
+metodo = "mixto"
+herramientas = ["presidio", "revisor-arquitectura"]
+condicion = "llm == true and (datos_personales == true or salud == true or menores == true)"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-24)"
+
+[[control]]
+id = "OPS-LOGS-ESTRUCTURADOS"
+titulo = "Logs estructurados con correlación, eventos de seguridad y sin tokens ni PII"
+alias = ["VC-22", "INF-17", "SEC-29"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["semgrep", "bearer"]
+condicion = "servidor == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: semgrep/bearer no tienen regla que acredite logs estructurados sin PII (pase vacío en AUD-INF): solo vale un pase explícito en checks_pass; sin él, no_evaluado.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-22); investigacion/02-seguridad.md (SEC-29); investigacion/04-infra-escalabilidad-carga.md (INF-17)"
+
+[[control]]
+id = "OPS-DERECHOS-TITULAR"
+titulo = "Exportar y eliminar cuenta implementado, incluidos storage y proveedores"
+alias = ["GAP-04"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["revisor-arquitectura"]
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-04)"
+
+[[control]]
+id = "OPS-LICITUD"
+titulo = "Base de licitud y consentimiento por finalidad; consentimiento expreso para datos de salud"
+alias = ["GAP-03"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "alta"
+metodo = "manual"
+herramientas = []
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-03)"
+
+[[control]]
+id = "OPS-TRANSFERENCIAS"
+titulo = "Transferencias internacionales identificadas (región de cada proveedor)"
+alias = ["GAP-06"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["detectar_stack", "revisor-arquitectura"]
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-06)"
+
+[[control]]
+id = "OPS-BRECHAS"
+titulo = "Plan de respuesta a brechas con notificación"
+alias = ["GAP-07"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "alta"
+metodo = "manual"
+herramientas = []
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-07)"
+
+[[control]]
+id = "OPS-RPO-RTO"
+titulo = "RPO y RTO declarados; copia cifrada fuera del proveedor; backup de storage, auth, variables y DNS"
+alias = ["GAP-30", "GAP-31", "GAP-32"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: depende de la respuesta del creador (entrevista).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-30, GAP-31, GAP-32)"
+
+[[control]]
+id = "OPS-SECRETOS-CICLO"
+titulo = "Inventario de secretos con dueño y rotación; procedimiento de rotación tras fuga probado"
+alias = ["GAP-34", "GAP-35", "SEC-39"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "alta"
+metodo = "mixto"
+herramientas = ["entrevista"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: depende de la respuesta del creador (entrevista).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/02-seguridad.md (SEC-39); investigacion/08-vacios-critico.md (GAP-34, GAP-35)"
+
+[[control]]
+id = "OPS-RUNBOOK"
+titulo = "Runbook de operación no técnico y panel de salud del dueño"
+alias = ["GAP-43", "GAP-44"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "media"
+metodo = "llm"
+herramientas = ["redactor-dueno"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (redactor-dueno): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-43, GAP-44)"
+
+[[control]]
+id = "OPS-TRASPASO"
+titulo = "Paquete de traspaso: cuentas, 2 o más admins con MFA, ADR y riesgos aceptados firmados"
+alias = ["GAP-47"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-47)"
+
+[[control]]
+id = "OPS-LLM-TRAZAS"
+titulo = "Trazas del LLM con tokens y costo por request"
+alias = ["GAP-22"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N3"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["detectar_stack"]
+condicion = "llm == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere trazas de LLM configuradas: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/08-vacios-critico.md (GAP-22)"
+
+[[control]]
+id = "OPS-LOGICA-ABUSO"
+titulo = "Abuso de lógica de negocio (carreras, cupones, límites de plan) revisado contra el flujograma"
+alias = ["GAP-49"]
+dominio = "OPS"
+etapa = "E1"
+gate = "N3"
+severidad_base = "alta"
+metodo = "llm"
+herramientas = ["revisor-arquitectura"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método llm (revisor-arquitectura): es juicio, no patrón; lo resuelve F3 (revisores LLM).
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-49)"
+
+[[control]]
+id = "OPS-OTEL-RED"
+titulo = "Observabilidad OpenTelemetry con métricas RED, monitoreo de BD y alertas por SLO con runbooks"
+alias = ["INF-23", "INF-24", "ING-20", "ECO-18", "DB-28"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N4"
+severidad_base = "media"
+metodo = "mixto"
+herramientas = ["detectar_stack"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere instrumentación OpenTelemetry presente: pase explícito.
+evidencia_pass = "checks_pass"
+esfuerzo = "L"
+fuente = "investigacion/03-bases-de-datos.md (DB-28); investigacion/04-infra-escalabilidad-carga.md (INF-23, INF-24); investigacion/06-ingenieria-software-ciclo.md (ING-20); investigacion/07-repos-skills-expertos.md (ECO-18)"
+
+[[control]]
+id = "OPS-RETENCION"
+titulo = "Datos legacy y política de retención y borrado definidos"
+alias = ["VC-24"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N4"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-24)"
+
+[[control]]
+id = "OPS-JURIDICO"
+titulo = "Cumplimiento normativo verificado contra el texto legal por una persona"
+alias = ["SEC-36"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N4"
+severidad_base = "alta"
+metodo = "manual"
+herramientas = []
+condicion = "datos_personales == true or salud == true or menores == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "investigacion/02-seguridad.md (SEC-36)"
+
+[[control]]
+id = "OPS-EIPD"
+titulo = "Evaluación de impacto (EIPD/DPIA) con datos sensibles a escala o usuarios en la UE"
+alias = ["GAP-09"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N4"
+severidad_base = "media"
+metodo = "manual"
+herramientas = []
+condicion = "salud == true or menores == true or ue == true"
+bloquea_global = false
+# DECISIONES.md #4: aviso legal destacado; no entra en el nivel (ni del dominio ni global).
+aviso_legal = true
+mapea_reglas = []
+# evidencia_pass: aviso legal (DECISIONES.md #4): el auditor nunca afirma cumplimiento; queda manual_pendiente hasta que el creador confirme.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "investigacion/08-vacios-critico.md (GAP-09)"
+
+[[control]]
+id = "OPS-SALIDA-PROVEEDOR"
+titulo = "Plan de salida del proveedor documentado y export probado"
+alias = ["GAP-29"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N4"
+severidad_base = "baja"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-29)"
+
+[[control]]
+id = "OPS-EVALS-LLM"
+titulo = "Evals de regresión del prompt en CI y fallback ante caída o deprecación del modelo"
+alias = ["GAP-23", "GAP-25"]
+dominio = "OPS"
+etapa = "E4"
+gate = "N4"
+severidad_base = "media"
+metodo = "determinista"
+herramientas = ["promptfoo"]
+condicion = "llm == true"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere evals de LLM que existan y pasen: pase explícito de promptfoo.
+evidencia_pass = "checks_pass"
+esfuerzo = "M"
+fuente = "investigacion/08-vacios-critico.md (GAP-23, GAP-25)"
+
+[[control]]
+id = "OPS-REAUDITORIA"
+titulo = "Re-auditoría programada barata (osv, gitleaks, scorecard, vencimientos) con hallazgos mapeados al catálogo"
+alias = ["GAP-52", "ECO-19", "GAP-01"]
+dominio = "OPS"
+etapa = "E5"
+gate = "N4"
+severidad_base = "baja"
+metodo = "determinista"
+herramientas = ["osv-scanner", "gitleaks", "scorecard"]
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+exige_checks_pass = true
+# evidencia_pass: requiere evidencia de re-auditoría periódica (CI programado): pase explícito; osv/gitleaks/scorecard sin hallazgos no la demuestran.
+evidencia_pass = "checks_pass"
+esfuerzo = "S"
+fuente = "investigacion/07-repos-skills-expertos.md (ECO-19); investigacion/08-vacios-critico.md (GAP-52, GAP-01)"
+
+[[control]]
+id = "OPS-DR"
+titulo = "Recuperación ante desastres multi-región probada"
+alias = []
+dominio = "OPS"
+etapa = "E6"
+gate = "N5"
+severidad_base = "baja"
+metodo = "manual"
+herramientas = []
+condicion = "siempre"
+bloquea_global = false
+mapea_reglas = []
+# evidencia_pass: método manual: requiere evidencia del creador o entrevista; ningún escáner estático lo demuestra.
+evidencia_pass = "no_demostrable_estatico"
+esfuerzo = "L"
+fuente = "PLAN_MAESTRO.md §4.3"

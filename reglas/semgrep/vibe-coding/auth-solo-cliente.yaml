@@ -1,0 +1,24 @@
+rules:
+  - id: auth-solo-cliente
+    message: >-
+      La autorización se decide en el navegador con un valor de $ALMACEN ('$CLAVE'). Cualquiera
+      puede editarlo desde las herramientas del navegador. El rol debe verificarse en el servidor
+      (o en RLS) en cada petición; el cliente solo puede usarlo para mostrar u ocultar la interfaz.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      control: SEG-AUTH-CLIENTE
+      cwe: "CWE-602: Client-Side Enforcement of Server-Side Security"
+      categoria: vibe-coding
+    patterns:
+      - pattern-either:
+          - pattern: $ALMACEN.getItem("$CLAVE")
+          - pattern: $ALMACEN.setItem("$CLAVE", ...)
+          - pattern: $ALMACEN["$CLAVE"]
+          - pattern: $ALMACEN.$CLAVE
+      - metavariable-regex:
+          metavariable: $ALMACEN
+          regex: ^(window\.)?(localStorage|sessionStorage)$
+      - metavariable-regex:
+          metavariable: $CLAVE
+          regex: (?i)^(es_?admin|is_?admin|admin|rol|role|roles|user_?role|es_?premium|is_?premium|premium|plan|is_?pro|es_?pro|permisos|permissions|is_?staff|is_?superuser|autorizado|authorized|is_?authenticated|isLoggedIn|logged_?in|es_?medico|es_?profesional)$

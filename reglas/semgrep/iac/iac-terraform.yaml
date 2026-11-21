@@ -1,0 +1,38 @@
+# Reglas locales de IaC (Terraform/HCL) del fallback check_iac (reemplaza a checkov; DECISIONES #6).
+# Cobertura parcial: ~5 % del catálogo de checkov (ESTIMACIÓN; investigacion/13 §4.8).
+# El id de cada regla es la subregla del check: check:iac.<id>.
+rules:
+  - id: tf_ingreso_abierto
+    languages: [generic]
+    severity: ERROR
+    message: Regla de ingreso abierta a 0.0.0.0/0 en un puerto de administración o base de datos.
+    metadata: {control: INF-IAC, severidad: alta, reemplaza: checkov}
+    pattern-either:
+      - pattern-regex: (?s)ingress\s*\{[^{}]*?\b(?:from_port|to_port)\s*=\s*(?:22|3389|5432|3306|6379|27017)\b[^{}]*?0\.0\.0\.0/0
+      - pattern-regex: (?s)ingress\s*\{[^{}]*?0\.0\.0\.0/0[^{}]*?\b(?:from_port|to_port)\s*=\s*(?:22|3389|5432|3306|6379|27017)\b
+  - id: tf_bucket_publico
+    languages: [generic]
+    severity: ERROR
+    message: Bucket con ACL pública o bloqueo de acceso público desactivado.
+    metadata: {control: INF-IAC, severidad: alta, reemplaza: checkov}
+    pattern-either:
+      - pattern-regex: \bacl\s*=\s*"public-read(?:-write)?"
+      - pattern-regex: \b(?:block_public_acls|block_public_policy|ignore_public_acls|restrict_public_buckets)\s*=\s*false\b
+  - id: tf_sin_cifrado
+    languages: [generic]
+    severity: WARNING
+    message: Almacenamiento con cifrado en reposo desactivado.
+    metadata: {control: INF-IAC, severidad: media, reemplaza: checkov}
+    pattern-regex: \b(?:encrypted|storage_encrypted|encryption_enabled)\s*=\s*false\b
+  - id: tf_bd_publica
+    languages: [generic]
+    severity: ERROR
+    message: Base de datos accesible públicamente (publicly_accessible = true).
+    metadata: {control: INF-IAC, severidad: alta, reemplaza: checkov}
+    pattern-regex: \bpublicly_accessible\s*=\s*true\b
+  - id: tf_secreto_literal
+    languages: [generic]
+    severity: ERROR
+    message: Contraseña, secreto o token literal en el código de infraestructura.
+    metadata: {control: INF-IAC, severidad: alta, reemplaza: checkov}
+    pattern-regex: (?i)\b[\w-]*(?:password|passwd|secret|token|api_key)\s*=\s*"[^"$\s]{6,}"

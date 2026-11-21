@@ -1,0 +1,16 @@
+# Reglas locales de IaC (manifiestos Kubernetes y docker-compose) del fallback check_iac.
+# Las reglas que necesitan contexto (runAsNonRoot ausente, limits ausentes, puertos de BD en
+# compose, imagen sin tag) las evalúa scripts/checks/iac.py en Python.
+rules:
+  - id: k8s_privilegiado
+    languages: [generic]
+    severity: ERROR
+    message: Contenedor privilegiado o con escalamiento de privilegios permitido.
+    metadata: {control: INF-IAC, severidad: alta, reemplaza: checkov}
+    pattern-regex: (?m)^\s*(?:privileged|allowPrivilegeEscalation)\s*:\s*["']?true\b
+  - id: k8s_host
+    languages: [generic]
+    severity: ERROR
+    message: El pod comparte la red, PID o IPC del host.
+    metadata: {control: INF-IAC, severidad: alta, reemplaza: checkov}
+    pattern-regex: (?m)^\s*host(?:Network|PID|IPC)\s*:\s*["']?true\b

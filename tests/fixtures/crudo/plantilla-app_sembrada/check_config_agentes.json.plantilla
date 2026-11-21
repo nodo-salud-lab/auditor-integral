@@ -1,0 +1,13 @@
+{
+ "hallazgos": [
+  {
+   "regla": "check:config_agentes.bypass_permissions",
+   "archivo": ".claude/settings.json",
+   "linea": 3,
+   "mensaje": "defaultMode bypassPermissions en la configuración del agente",
+   "evidencia": "\"defaultMode\": \"bypassPermissions\",",
+   "severidad_sugerida": "alta"
+  }
+ ],
+ "checks_pass": []
+}

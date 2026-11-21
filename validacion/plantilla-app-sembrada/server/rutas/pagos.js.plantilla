@@ -1,0 +1,51 @@
+import { Router } from 'express'
+import Stripe from 'stripe'
+import { config } from '../config.js'
+import { pool } from '../db.js'
+import { requiereAuth } from '../middleware/auth.js'
+
+const router = Router()
+const stripe = new Stripe(config.stripeSecret)
+
+// Crear el cobro de una sesión
+router.post('/crear', async (req, res) => {
+  try {
+    const intento = await stripe.paymentIntents.create({
+      amount: req.body.monto,
+      currency: 'clp',
+      metadata: { sesionId: req.body.sesionId },
+    })
+    res.json({ clientSecret: intento.client_secret })
+  } catch (e) {}
+})
+
+// Webhook de Stripe: marca la sesión como pagada
+router.post('/webhook', async (req, res) => {
+  const evento = req.body
+  if (evento.type === 'payment_intent.succeeded') {
+    await pool.query('UPDATE sesiones SET pagada = true WHERE id = $1', [evento.data.object.metadata.sesionId])
+  }
+  res.sendStatus(200)
+})
+
+// Versión nueva: el precio se toma de la base de datos, nunca del cliente
+router.post('/crear-v2', requiereAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT s.id, p.precio_sesion FROM sesiones s JOIN profesionales p ON p.id = s.profesional_id WHERE s.id = $1 AND s.paciente_id = $2',
+      [req.body.sesionId, req.usuario.id]
+    )
+    if (rows.length === 0) return res.status(404).json({ error: 'Sesión no encontrada' })
+    const intento = await stripe.paymentIntents.create({
+      amount: rows[0].precio_sesion,
+      currency: 'clp',
+      metadata: { sesionId: rows[0].id },
+    })
+    res.json({ clientSecret: intento.client_secret })
+  } catch (error) {
+    console.error('Error creando el cobro', { sesionId: req.body.sesionId, mensaje: error.message })
+    res.status(502).json({ error: 'No se pudo iniciar el pago. Intenta de nuevo.' })
+  }
+})
+
+export default router

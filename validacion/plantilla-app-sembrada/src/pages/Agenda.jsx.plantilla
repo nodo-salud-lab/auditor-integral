@@ -1,0 +1,23 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabaseClient.js'
+import TarjetaProfesional from '../components/TarjetaProfesional.jsx'
+import Comentario from '../components/Comentario.jsx'
+
+export default function Agenda() {
+  const [profesionales, setProfesionales] = useState([])
+  const [comentarios, setComentarios] = useState([])
+
+  useEffect(() => {
+    supabase.from('profesionales').select('id, nombre, especialidad, biografia, precio_sesion').limit(50)
+      .then(({ data }) => setProfesionales(data ?? []))
+    supabase.from('comentarios').select('*').order('creado_en', { ascending: false }).limit(20)
+      .then(({ data }) => setComentarios(data ?? []))
+  }, [])
+
+  return (
+    <main>
+      {profesionales.map((p) => <TarjetaProfesional key={p.id} profesional={p} />)}
+      {comentarios.map((c) => <Comentario key={c.id} comentario={c} />)}
+    </main>
+  )
+}

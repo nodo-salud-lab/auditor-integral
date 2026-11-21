@@ -1,0 +1,344 @@
+{
+ "version": "2.1.0",
+ "runs": [
+  {
+   "results": [
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": ".github/workflows/preview.yml",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 34,
+         "endLine": 13,
+         "snippet": {
+          "text": "      - uses: actions/checkout@v4"
+         },
+         "startColumn": 9,
+         "startLine": 13
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "GitHub Actions step uses a mutable tag or branch reference. Tags and branch names can be silently repointed by the action owner, enabling supply-chain attacks — as seen in the trivy-action and kics-github-action compromises. Pin the reference to a full 40-character commit SHA instead, e.g. `uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608`."
+     },
+     "properties": {},
+     "ruleId": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": ".github/workflows/preview.yml",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 57,
+         "endLine": 15,
+         "snippet": {
+          "text": "      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}"
+         },
+         "startColumn": 9,
+         "startLine": 13
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "This GitHub Actions workflow file uses `pull_request_target` and checks out code from the incoming pull request. When using `pull_request_target`, the Action runs in the context of the target repository, which includes access to all repository secrets. Normally, this is safe because the Action only runs code from the target repository, not the incoming PR. However, by checking out the incoming PR code, you're now using the incoming code for the rest of the action. You may be inadvertently executing arbitrary code from the incoming PR with access to repository secrets, which would let an attacker steal repository secrets. This normally happens by running build scripts (e.g., `npm build` and `make`) or dependency installation scripts (e.g., `python setup.py install`). Audit your workflow file to make sure no code from the incoming PR is executed. Please see https://securitylab.github.com/research/github-actions-preventing-pwn-requests/ for additional mitigations."
+     },
+     "properties": {},
+     "ruleId": "yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": ".github/workflows/preview.yml",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 36,
+         "endLine": 16,
+         "snippet": {
+          "text": "      - uses: actions/setup-node@v4"
+         },
+         "startColumn": 9,
+         "startLine": 16
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "GitHub Actions step uses a mutable tag or branch reference. Tags and branch names can be silently repointed by the action owner, enabling supply-chain attacks — as seen in the trivy-action and kics-github-action compromises. Pin the reference to a full 40-character commit SHA instead, e.g. `uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608`."
+     },
+     "properties": {},
+     "ruleId": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": ".github/workflows/preview.yml",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 44,
+         "endLine": 20,
+         "snippet": {
+          "text": "      - uses: amondnet/vercel-action@master"
+         },
+         "startColumn": 9,
+         "startLine": 20
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "GitHub Actions step uses a mutable tag or branch reference. Tags and branch names can be silently repointed by the action owner, enabling supply-chain attacks — as seen in the trivy-action and kics-github-action compromises. Pin the reference to a full 40-character commit SHA instead, e.g. `uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608`."
+     },
+     "properties": {},
+     "ruleId": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": ".github/workflows/triage.yml",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 84,
+         "endLine": 16,
+         "snippet": {
+          "text": "        run: |\n          echo \"Nuevo issue: ${{ github.event.issue.title }}\"\n          gh issue edit ${{ github.event.issue.number }} --add-label \"por-revisar\""
+         },
+         "startColumn": 9,
+         "startLine": 14
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\"."
+     },
+     "properties": {},
+     "ruleId": "yaml.github-actions.security.run-shell-injection.run-shell-injection"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "server/rutas/reportes.js",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 39,
+         "endLine": 15,
+         "snippet": {
+          "text": "  const valor = eval(req.body.formula)"
+         },
+         "startColumn": 17,
+         "startLine": 15
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Found data from an Express or Next web request flowing to `eval`. If this data is user-controllable this can lead to execution of arbitrary system commands in the context of your application process. Avoid `eval` whenever possible."
+     },
+     "properties": {},
+     "ruleId": "javascript.lang.security.audit.code-string-concat.code-string-concat"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "src/components/Comentario.jsx",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 83,
+         "endLine": 10,
+         "snippet": {
+          "text": "      <div className=\"cuerpo\" dangerouslySetInnerHTML={{ __html: comentario.cuerpo }} />"
+         },
+         "startColumn": 66,
+         "startLine": 10
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detection of dangerouslySetInnerHTML from non-constant definition. This can inadvertently expose users to cross-site scripting (XSS) attacks if this comes from user-provided input. If you have to use dangerouslySetInnerHTML, consider using a sanitization library such as DOMPurify to sanitize your HTML."
+     },
+     "properties": {},
+     "ruleId": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml"
+    }
+   ],
+   "tool": {
+    "driver": {
+     "name": "Semgrep OSS",
+     "rules": [
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Found data from an Express or Next web request flowing to `eval`. If this data is user-controllable this can lead to execution of arbitrary system commands in the context of your application process. Avoid `eval` whenever possible."
+       },
+       "helpUri": "https://semgrep.dev/r/javascript.lang.security.audit.code-string-concat.code-string-concat",
+       "id": "javascript.lang.security.audit.code-string-concat.code-string-concat",
+       "name": "javascript.lang.security.audit.code-string-concat.code-string-concat",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')",
+         "HIGH CONFIDENCE",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: javascript.lang.security.audit.code-string-concat.code-string-concat"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "warning"
+       },
+       "fullDescription": {
+        "text": "Detection of dangerouslySetInnerHTML from non-constant definition. This can inadvertently expose users to cross-site scripting (XSS) attacks if this comes from user-provided input. If you have to use dangerouslySetInnerHTML, consider using a sanitization library such as DOMPurify to sanitize your HTML."
+       },
+       "helpUri": "https://semgrep.dev/r/typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
+       "id": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
+       "name": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+         "MEDIUM CONFIDENCE",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "OWASP-A07:2017 - Cross-Site Scripting (XSS)",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "warning"
+       },
+       "fullDescription": {
+        "text": "GitHub Actions step uses a mutable tag or branch reference. Tags and branch names can be silently repointed by the action owner, enabling supply-chain attacks — as seen in the trivy-action and kics-github-action compromises. Pin the reference to a full 40-character commit SHA instead, e.g. `uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608`."
+       },
+       "helpUri": "https://semgrep.dev/r/yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag",
+       "id": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag",
+       "name": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-1357: Reliance on Insufficiently Trustworthy Component",
+         "CWE-353: Missing Support for Integrity Check",
+         "HIGH CONFIDENCE",
+         "OWASP-A08:2021 - Software and Data Integrity Failures",
+         "OWASP-A08:2025 - Software and Data Integrity Failures",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "This GitHub Actions workflow file uses `pull_request_target` and checks out code from the incoming pull request. When using `pull_request_target`, the Action runs in the context of the target repository, which includes access to all repository secrets. Normally, this is safe because the Action only runs code from the target repository, not the incoming PR. However, by checking out the incoming PR code, you're now using the incoming code for the rest of the action. You may be inadvertently executing arbitrary code from the incoming PR with access to repository secrets, which would let an attacker steal repository secrets. This normally happens by running build scripts (e.g., `npm build` and `make`) or dependency installation scripts (e.g., `python setup.py install`). Audit your workflow file to make sure no code from the incoming PR is executed. Please see https://securitylab.github.com/research/github-actions-preventing-pwn-requests/ for additional mitigations."
+       },
+       "helpUri": "https://semgrep.dev/r/yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout",
+       "id": "yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout",
+       "name": "yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-829: Inclusion of Functionality from Untrusted Control Sphere",
+         "HIGH CONFIDENCE",
+         "OWASP-A08:2021 - Software and Data Integrity Failures",
+         "OWASP-A08:2025 - Software and Data Integrity Failures",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\"."
+       },
+       "helpUri": "https://semgrep.dev/r/yaml.github-actions.security.run-shell-injection.run-shell-injection",
+       "id": "yaml.github-actions.security.run-shell-injection.run-shell-injection",
+       "name": "yaml.github-actions.security.run-shell-injection.run-shell-injection",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+         "HIGH CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: yaml.github-actions.security.run-shell-injection.run-shell-injection"
+       }
+      }
+     ],
+     "semanticVersion": "1.181.0"
+    }
+   }
+  }
+ ],
+ "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json"
+}

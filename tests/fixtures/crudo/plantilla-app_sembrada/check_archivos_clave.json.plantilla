@@ -1,0 +1,30 @@
+{
+ "hallazgos": [
+  {
+   "regla": "check:archivos_clave.env_ejemplo_ausente",
+   "archivo": ".env.example",
+   "linea": null,
+   "mensaje": "No existe .env.example con las variables requeridas",
+   "evidencia": "falta .env.example",
+   "severidad_sugerida": "alta"
+  },
+  {
+   "regla": "check:archivos_clave.health_ausente",
+   "archivo": null,
+   "linea": null,
+   "mensaje": "No se encontró endpoint /health",
+   "evidencia": "sin ruta /health en server/",
+   "severidad_sugerida": "media"
+  }
+ ],
+ "checks_pass": [
+  "check:archivos_clave.lockfile",
+  "check:archivos_clave.lockfile_valido",
+  "check:archivos_clave.lockfile_versionado",
+  "check:archivos_clave.lockfile_ci",
+  "check:archivos_clave.lockfile_hosts",
+  "check:archivos_clave.readme",
+  "check:archivos_clave.ci",
+  "check:archivos_clave.migraciones"
+ ]
+}

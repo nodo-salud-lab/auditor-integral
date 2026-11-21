@@ -1,0 +1,102 @@
+# Informe de auditoría — $proyecto
+
+Corrida `$corrida` · commit `$commit` · modo **$modo** · auditor-integral $version_auditor · informe generado por plantilla, sin LLM (los juicios de la IA, si los hubo, se listan en las secciones 2 y 6b).
+
+> **SÍNTESIS** de herramientas deterministas. El auditor **no certifica seguridad** ni cumplimiento legal: señala riesgos con la evidencia que pudo reunir.
+
+$aviso_legal
+
+$aviso_descartes
+
+## 1. Veredicto
+
+- Nivel global demostrado: **$nivel_demostrado** (potencial: **$nivel_potencial**, si se pudiera evaluar todo lo pendiente).
+- $nota_no_evaluado
+- Hito de uso habilitado: $hito.
+- ¿Listo para datos reales? **$listo_datos_reales**
+- Dominios cuello de botella: $cuello.
+
+$bloqueos
+
+## 2. Qué hizo el auditor
+
+$que_hizo
+
+## 3. Qué falta
+
+$que_falta
+
+## 4. Qué hacer ahora
+
+Orden decidido por el script: críticos primero, luego lo que falla para el siguiente nivel y al final lo que falta evaluar. Esfuerzo S/M/L = **ESTIMACIÓN** del catálogo.
+
+$que_hacer
+
+## 5. Tablero por dominio
+
+| Dominio | Demostrado | Potencial | Letra (A-E) | Puntaje | Cobertura | Críticos | Altos | Nota |
+|---|---|---|---|---|---|---|---|---|
+$tabla_dominios
+
+Puntaje global: $puntaje_global. El puntaje y la letra son informativos; el nivel lo deciden las compuertas. Puntaje: media ponderada pass/fail sobre controles evaluados, estilo OpenSSF Scorecard ($metodo_puntaje; global ×1,5 en SEG/DAT con salud o pagos, según CVSS v3.1). Letra: peor fallo abierto, estilo SonarQube (A sin fallos, B baja, C media, D alta, E crítica). La equivalencia entre las severidades del catálogo y esas escalas es **ESTIMACIÓN** (sin validar en este auditor).
+
+### Cobertura por nivel
+
+| Nivel | Aplicables | Evaluados | Cobertura | Estado |
+|---|---|---|---|---|
+$tabla_cobertura
+
+$no_demostrable
+
+### Índice de Usabilidad Automatizado (IUA)
+
+$seccion_iua
+
+## 6. Hallazgos críticos y altos
+
+$hallazgos
+
+## 6b. Decisiones de la IA
+
+Separadas de las deterministas: los hallazgos de la sección 6 salen de herramientas; lo que sigue lo decidió un modelo y lo validaron los scripts (`decisiones_ia.json`).
+
+$decisiones_ia
+
+## 6c. Falsos positivos verificados por una persona
+
+Registro que escribe la persona (no la IA) en el proyecto: un hallazgo descartado así deja de bloquear el nivel, pero su control no queda en `pass` (DECISIONES.md #11).
+
+$descartes_humanos
+
+## 6d. Otros hallazgos abiertos (media, baja, info)
+
+No bloquean por sí solos, pero quedan a la vista: nada de lo que un check omite o rebaja desaparece del informe.
+
+$hallazgos_menores
+
+## 7. Lo que NO se evaluó
+
+$no_evaluados
+
+## 8. Avisos de continuidad y legales
+
+$avisos_legales
+
+## 9. Hoja de ruta
+
+Ver `hoja-de-ruta.md` ($n_items_ruta ítems: solo el siguiente nivel de cada dominio y los críticos) y `resumen-dueno.md` (una página, sin jerga).
+
+## 10. Metodología
+
+- Herramientas y versiones: $herramientas.
+- Perfil usado: $perfil_origen. Las banderas sin respuesta de la entrevista quedan como desconocidas: no se asume la respuesta.
+- Hallazgos: $n_hallazgos en el informe ($n_hallazgos_todos instancias antes del tope de 5 por control y archivo); reglas sin mapear al catálogo: $n_sin_mapear.
+- Umbral de cobertura del puntaje: $umbral_cobertura (propuesta; lo decide el investigador).
+- Secretos: sin verificación de revocación, todo secreto detectado se presume vivo. La evidencia está enmascarada (prefijo + `****` + últimos 4).
+
+## 11. Limitaciones
+
+- El auditor no certifica seguridad ni cumplimiento legal; un control en `pass` significa que las herramientas disponibles no encontraron el problema, no que no exista.
+- Los juicios de la IA (sección 2) son opiniones sobre un digest acotado y requieren verificación humana; nunca convierten un `fail` determinista en `pass`. Los controles que necesitan juicio y no se juzgaron quedan `no_evaluado`.
+- "axe limpio no equivale a accesible"; las pruebas dinámicas (app corriendo) no se ejecutaron sin confirmación.
+- Los umbrales y pesos marcados como propuesta son **ESTIMACIÓN** y no están validados.

@@ -1,0 +1,20 @@
+(function(){const t=document.createElement("link").relList;if(t&&t.supports&&t.supports("modulepreload"))return;for(const r of document.querySelectorAll('link[rel="modulepreload"]'))n(r);function n(r){if(r.ep)return;r.ep=!0;fetch(r.href)}})();
+var Vf={exports:{}},le={};
+const Du="https://tvhgdxhbtuycsolluhqj.supabase.co",Fu="@@CANARIO:C10@@";
+const Wk=bf(Du,Fu);
+const Ip="@@CANARIO:C07@@";
+function Rp(e){return new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP"}).format(e)}
+var Qy={};
+const Hm=bf("https://tvhgdxhbtuycsolluhqj.supabase.co","@@CANARIO:C01@@",{auth:{persistSession:!1}});
+function Xd(e){return String(e).replace(/[^0-9kK]/g,"").toUpperCase()}
+var Zl=[];
+var Yo={},Kc=null;
+const Ab="@@CANARIO:C05@@";
+async function Ug(e){return(await fetch("https://api.stripe.com/v1/refunds",{method:"POST",headers:{Authorization:`Bearer ${Ab}`},body:new URLSearchParams({charge:e})})).json()}
+var Jn={},Ot=0;
+function Pe(e){return Ot++,e}
+var qr=new Map;
+const Ga=new $w({apiKey:"@@CANARIO:C03@@",dangerouslyAllowBrowser:!0});
+async function Lv(e){return(await Ga.chat.completions.create({model:"gpt-4o",messages:[{role:"system",content:"Resume la sesión de kinesiología en HTML con viñetas."},{role:"user",content:e}]})).choices[0].message.content}
+var Ch={exports:{}};
+function Sy(){return window.location.pathname}

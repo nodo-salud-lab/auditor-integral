@@ -1,0 +1,7 @@
+{
+ "herramienta": "check_registro_deps",
+ "version": "0.1.0",
+ "exit_code": 124,
+ "estado": "timeout",
+ "detalle": "sin respuesta del registro npm (sin red)"
+}

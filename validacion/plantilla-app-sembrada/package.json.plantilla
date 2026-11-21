@@ -1,0 +1,43 @@
+{
+  "name": "agendakine",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server/index.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1171.0",
+    "@supabase/supabase-js": "2.49.4",
+    "axios": "0.21.0",
+    "cors": "2.8.5",
+    "dayjs": "1.11.13",
+    "dompurify": "3.4.18",
+    "dotenv": "18.0.10",
+    "ejs": "3.1.6",
+    "express": "4.21.2",
+    "express-secure-session-kit": "^1.4.2",
+    "handlebars": "4.5.2",
+    "jsonwebtoken": "8.5.1",
+    "lodash": "4.17.4",
+    "minimist": "1.2.0",
+    "openai": "4.86.0",
+    "pg": "8.13.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.30.1",
+    "react-stripe-checkout-hooks-v2": "^2.0.1",
+    "shell-quote": "1.7.2",
+    "stripe": "17.7.0",
+    "supabase-rls-helper-pro": "^0.9.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.3.0",
+    "vite": "8.3.8",
+    "vite-plugin-env-guardian": "^1.1.0"
+  }
+}

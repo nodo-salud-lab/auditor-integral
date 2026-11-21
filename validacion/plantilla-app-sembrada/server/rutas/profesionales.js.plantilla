@@ -1,0 +1,28 @@
+import { Router } from 'express'
+import cors from 'cors'
+import { z } from 'zod'
+import { pool } from '../db.js'
+
+const router = Router()
+// Este listado se consume desde el sitio público: origen explícito, sin credenciales
+router.use(cors({ origin: 'https://agendakine.cl' }))
+
+const filtro = z.object({ especialidad: z.string().max(60).optional() })
+
+// Listado público de profesionales, validado y paginado
+router.get('/', async (req, res) => {
+  const parse = filtro.safeParse(req.query)
+  if (!parse.success) return res.status(400).json({ error: 'Filtro inválido' })
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, nombre, especialidad, precio_sesion FROM profesionales WHERE ($1::text IS NULL OR especialidad = $1) LIMIT 50',
+      [parse.data.especialidad ?? null]
+    )
+    res.json(rows)
+  } catch (error) {
+    console.error('Error listando profesionales', { mensaje: error.message })
+    res.status(500).json({ error: 'Error interno' })
+  }
+})
+
+export default router

@@ -1,0 +1,212 @@
+# Perfil de riesgo: banderas de perfil.json (PLAN_MAESTRO.md §3.6) → controles
+# condicionales, y reglas de severidad contextual.
+#
+# [[bandera]]
+#   nombre     bandera en perfil.json → banderas (schemas/perfil.schema.json)
+#   tipo       booleano | enum | entero
+#   deteccion  archivos (detectar_stack.py, con confirmación en la entrevista) | entrevista
+#   pregunta   número de pregunta de la entrevista E0/E5 que la fija o confirma
+#   activa     controles cuya `condicion` depende de esta bandera (patrones fnmatch sobre IDs).
+#              Es documentación verificada por tests; la activación real la decide la
+#              `condicion` de cada control en controles.toml.
+#
+# [[regla_contextual]]  (se aplican en orden; solo cuando la condición es verdadera, nunca
+#   con banderas sin respuesta: no se asume la respuesta)
+#   condicion        expresión con la misma gramática que controles.toml
+#   controles        patrones fnmatch sobre IDs
+#   severidad_base   nueva severidad (solo puede subir)
+#   gate             nuevo gate (solo puede adelantarse a un nivel menor)
+#   bloquea_global   true para que el fallo bloquee el nivel global
+#
+# El auditor señala riesgo; no afirma cumplimiento de la Ley 19.628, la Ley 20.584 ni la
+# Ley 21.719 (PLAN_MAESTRO.md §3.6).
+
+# ---------------------------------------------------------------- detectables por archivos
+
+[[bandera]]
+nombre = "baas"
+tipo = "enum"
+valores = ["supabase", "firebase", "ninguno"]
+deteccion = "archivos"
+pregunta = 0
+activa = ["DAT-RLS-*", "DAT-ANON-NEGATIVA", "DAT-BUCKETS", "DAT-SECDEF"]
+
+[[bandera]]
+nombre = "ssr_serverless"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 7
+activa = ["DAT-POOLER", "INF-TAREAS-LARGAS"]
+
+[[bandera]]
+nombre = "llm"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 5
+activa = ["SEG-LLM-*", "SEG-REDTEAM-LLM", "ESC-LLM-TOPE", "OPS-LLM-*", "OPS-EVALS-LLM"]
+
+[[bandera]]
+nombre = "pagos"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 4
+activa = ["SEG-PAGOS-*"]
+
+[[bandera]]
+nombre = "emails"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 6
+activa = ["INF-EMAIL-*"]
+
+[[bandera]]
+nombre = "docker"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["INF-DOCKERFILE"]
+
+[[bandera]]
+nombre = "iac"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["INF-IAC", "INF-IAC-REPRO"]
+
+[[bandera]]
+nombre = "k8s"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["INF-K8S"]
+
+[[bandera]]
+nombre = "movil"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["INF-MOVIL"]
+
+[[bandera]]
+nombre = "pwa"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["UX-SW-PWA"]
+
+[[bandera]]
+nombre = "multi_idioma"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["UX-I18N"]
+
+[[bandera]]
+nombre = "agente_ia"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["SEG-AGENTES-IA"]
+
+# servidor y bd (Anexo C del brazo C, AUD-INF): una PWA estática sin backend ni BD no debe recibir
+# controles de servidor/BD/IaC como «pases vacíos»; quedan no_aplica. Si perfil.json no las trae, se
+# toman de perfil_tecnico.json (utiles.cargar_perfil).
+[[bandera]]
+nombre = "servidor"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["INF-REGION", "INF-IAC-REPRO", "INF-TIMEOUTS-SALIDA", "OPS-HEALTH", "OPS-LOGS-ESTRUCTURADOS",
+          "OPS-OTEL-RED"]
+
+[[bandera]]
+nombre = "bd"
+tipo = "booleano"
+deteccion = "archivos"
+pregunta = 0
+activa = ["INF-REGION", "INF-IAC-REPRO", "DAT-N+1", "DAT-AUDITORIA-ACCESOS", "DAT-TIMEOUTS",
+          "DAT-CONSULTAS-LENTAS"]
+
+# ---------------------------------------------------------------- solo por entrevista
+
+[[bandera]]
+nombre = "datos_personales"
+tipo = "booleano"
+deteccion = "entrevista"
+pregunta = 3
+activa = ["OPS-PRIVACIDAD", "OPS-LEY-VIGENCIA", "OPS-LLM-PII", "OPS-DERECHOS-TITULAR", "OPS-LICITUD",
+          "OPS-TRANSFERENCIAS", "OPS-BRECHAS", "OPS-JURIDICO"]
+
+[[bandera]]
+nombre = "salud"
+tipo = "booleano"
+deteccion = "entrevista"
+pregunta = 3
+activa = ["OPS-PRIVACIDAD", "OPS-LEY-VIGENCIA", "OPS-LLM-PII", "OPS-DERECHOS-TITULAR", "OPS-LICITUD",
+          "OPS-TRANSFERENCIAS", "OPS-BRECHAS", "OPS-JURIDICO", "OPS-EIPD"]
+
+[[bandera]]
+nombre = "menores"
+tipo = "booleano"
+deteccion = "entrevista"
+pregunta = 3
+activa = ["OPS-PRIVACIDAD", "OPS-LEY-VIGENCIA", "OPS-LLM-PII", "OPS-DERECHOS-TITULAR", "OPS-LICITUD",
+          "OPS-TRANSFERENCIAS", "OPS-BRECHAS", "OPS-JURIDICO", "OPS-EIPD"]
+
+[[bandera]]
+nombre = "ue"
+tipo = "booleano"
+deteccion = "entrevista"
+pregunta = 3
+activa = ["OPS-EIPD"]
+
+[[bandera]]
+nombre = "datos_reales_cargados"
+tipo = "booleano"
+deteccion = "entrevista"
+pregunta = 9
+activa = []
+
+[[bandera]]
+nombre = "usuarios_3m"
+tipo = "entero"
+deteccion = "entrevista"
+pregunta = 8
+activa = []
+
+[[bandera]]
+nombre = "usuarios_12m"
+tipo = "entero"
+deteccion = "entrevista"
+pregunta = 8
+activa = []
+
+# ---------------------------------------------------------------- severidad contextual
+
+[[regla_contextual]]
+id = "RLS-ON-DATOS-REALES"
+descripcion = "Con BaaS y datos reales cargados, RLS habilitado pasa a ser requisito de N1 (§4.3: RLS-ON* en N1 si hay datos reales)."
+condicion = "baas != 'ninguno' and datos_reales_cargados == true"
+controles = ["DAT-RLS-ON"]
+gate = "N1"
+severidad_base = "critica"
+bloquea_global = true
+
+[[regla_contextual]]
+id = "SALUD-DATOS-REALES-EXPOSICION"
+descripcion = "Con datos de salud y datos reales cargados, toda exposición de datos es crítica y bloquea N1 (§3.6)."
+condicion = "salud == true and datos_reales_cargados == true"
+# DAT-RLS-* de §3.6 se lee como los controles de exposición RLS; DAT-RLS-TESTS (tests en CI)
+# no es una exposición y conserva su gate.
+controles = ["DAT-RLS-ON", "DAT-RLS-PERMISIVA", "DAT-RLS-SEMANTICA", "DAT-RLS-METADATA", "SEG-IDOR",
+             "DAT-BUCKETS", "DAT-ANON-NEGATIVA"]
+gate = "N1"
+severidad_base = "critica"
+bloquea_global = true
+
+[[regla_contextual]]
+id = "SALUD-AUDITORIA-ACCESOS"
+descripcion = "Con datos de salud, la auditoría de accesos sube a N2 (§3.6; GAP-37)."
+condicion = "salud == true"
+controles = ["DAT-AUDITORIA-ACCESOS"]
+gate = "N2"

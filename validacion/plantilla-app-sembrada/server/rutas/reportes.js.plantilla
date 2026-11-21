@@ -1,0 +1,36 @@
+import { Router } from 'express'
+import { exec } from 'node:child_process'
+import { pool } from '../db.js'
+
+const router = Router()
+
+// Reporte anual de sesiones
+router.get('/anual/:anio', async (req, res) => {
+  const resultado = await pool.query(`SELECT * FROM sesiones WHERE extract(year from fecha) = ${req.params.anio}`)
+  res.json(resultado.rows)
+})
+
+// Indicadores personalizados: el kinesiólogo escribe la fórmula
+router.post('/indicador', (req, res) => {
+  const valor = eval(req.body.formula)
+  res.json({ valor })
+})
+
+// Convierte un informe PDF subido a texto
+router.get('/texto', (req, res) => {
+  exec('pdftotext /srv/informes/' + req.query.archivo + ' -', (error, salida) => {
+    res.type('text/plain').send(salida)
+  })
+})
+
+// Reporte mensual con parámetros enlazados
+router.get('/mensual', async (req, res) => {
+  const { anio, mes } = req.query
+  const resultado = await pool.query(
+    'SELECT * FROM sesiones WHERE extract(year from fecha) = $1 AND extract(month from fecha) = $2',
+    [Number(anio), Number(mes)]
+  )
+  res.json(resultado.rows)
+})
+
+export default router

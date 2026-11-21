@@ -1,0 +1,14 @@
+{
+  "version_esquema": "1",
+  "corrida": "2026-11-17_2351-a1b2c3d",
+  "commit": "a1b2c3d",
+  "modo": "rapido",
+  "generado": "2026-11-17T23:59:00-03:00",
+  "controles": [
+    {"control": "UX-AXE-CRIT", "estado": "no_evaluado", "motivo": "app no ejecutable: falta .env", "metodo": "determinista", "duracion_s": 0},
+    {"control": "SEG-SECRETO-REPO", "estado": "pass", "motivo": null, "metodo": "determinista", "duracion_s": 2.4, "herramienta": "gitleaks", "hallazgos": []},
+    {"control": "SEG-SECRETO-BUNDLE", "estado": "fail", "metodo": "determinista", "duracion_s": 1.1, "herramienta": "gitleaks", "hallazgos": ["H-7f3a9c"]},
+    {"control": "OPS-LEY-VIGENCIA", "estado": "manual_pendiente", "motivo": "verificar en BCN el día de la auditoría", "metodo": "manual"},
+    {"control": "INF-K8S", "estado": "no_aplica", "motivo": "perfil: k8s = false", "metodo": "determinista"}
+  ]
+}

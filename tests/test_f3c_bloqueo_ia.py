@@ -155,7 +155,8 @@ class TestSuperficies(BaseInforme):
     def test_resumen_del_dueno(self):
         item = bloque_item(seccion(self.dueno, "## Qué hacer ahora", "---"), CONTROL)
         self.assert_ia(next(l for l in item.splitlines() if "Bloqueo" in l))
-        cabecera = seccion(self.dueno, "## En una frase", "## Qué hizo el auditor")
+        # R10: «## Portada» reemplazó a «## En una frase»; la línea «Bloqueos» quedó en el detalle del nivel, debajo
+        cabecera = seccion(self.dueno, "## Portada", "## Qué hizo el auditor")
         self.assert_ia(next(l for l in cabecera.splitlines() if l.startswith("- Bloqueos")))
 
     def test_roadmap_json(self):

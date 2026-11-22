@@ -39,6 +39,8 @@
 [[control]]
 id = "SEG-SECRETO-REPO"
 titulo = "Sin secretos en el working tree ni en el historial git"
+titulo_dueno = "Hay claves secretas guardadas dentro del proyecto"
+accion_dueno = "Cambia cada clave en su servicio hoy mismo y después sácala del proyecto."
 alias = ["VC-04", "SEC-01", "ECO-02", "INF-03"]
 dominio = "SEG"
 etapa = "E2"
@@ -63,6 +65,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-04); investigacion/02-seg
 [[control]]
 id = "SEG-SECRETO-BUNDLE"
 titulo = "Sin claves privilegiadas (service_role, sk_live, AKIA) en el build del cliente (dist, build, .next, out)"
+titulo_dueno = "Hay claves con permisos amplios dentro de lo que descarga el navegador"
+accion_dueno = "Cambia esas claves en su servicio hoy mismo, muévelas al servidor y vuelve a construir la app."
 alias = ["VC-05", "SEC-02", "DB-05", "ECO-06"]
 dominio = "SEG"
 etapa = "E2"
@@ -89,6 +93,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-05); investigacion/02-seg
 [[control]]
 id = "SEG-SECRETO-LOCAL"
 titulo = "Secretos locales no versionados (ignorados por git) y claves públicas por diseño (JWT anon) fuera del repo y del build"
+titulo_dueno = "Hay claves en archivos locales que git ignora"
+accion_dueno = "Revisa que esos archivos sigan fuera del repositorio y que ningún build los copie a lo publicado."
 # Ronda 6 (DECISIONES.md #12): gitleaks (normalizar/gitleaks.py) etiqueta como «secreto-local-ignorado:<regla>» los
 # hallazgos en archivos ignorados por git y nunca versionados, y como «jwt-anon-publico:<regla>» los JWT con role anon
 # (clave pública por diseño de Supabase); archivos_clave hace lo mismo con secreto_en_env_local (.env ignorado y sin
@@ -119,6 +125,8 @@ fuente = "DECISIONES.md #12 (ronda 6); investigacion/02-seguridad.md (SEC-01)"
 [[control]]
 id = "SEG-ENV-PUBLICAS"
 titulo = "Variables VITE_/NEXT_PUBLIC_/EXPO_PUBLIC_ sin nombres ni valores sensibles"
+titulo_dueno = "Una clave secreta quedaría visible para cualquier visitante del sitio"
+accion_dueno = "Quita el prefijo público (NEXT_PUBLIC_, VITE_, EXPO_PUBLIC_) a esa variable, úsala solo en el servidor y cámbiala en su servicio."
 alias = ["VC-06"]
 dominio = "SEG"
 etapa = "E2"
@@ -137,6 +145,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-06)"
 [[control]]
 id = "SEG-ENV-EJEMPLO"
 titulo = ".env ignorado por git y .env.example sin valores reales"
+titulo_dueno = "La configuración (`.env`) no está documentada ni protegida como corresponde"
+accion_dueno = "Crea `.env.example` con los nombres de las variables y valores inventados, y saca `.env` del repositorio si está ahí."
 alias = ["SEC-03", "ING-08"]
 dominio = "SEG"
 etapa = "E2"
@@ -155,6 +165,8 @@ fuente = "investigacion/02-seguridad.md (SEC-03); investigacion/06-ingenieria-so
 [[control]]
 id = "SEG-LLM-CLAVE"
 titulo = "Clave del proveedor LLM solo en el servidor"
+titulo_dueno = "La clave del servicio de IA podría quedar al alcance del navegador"
+accion_dueno = "Protege la clave del servicio de IA: úsala solo en el servidor y cámbiala si alguna vez llegó al navegador."
 alias = ["SEC-30"]
 dominio = "SEG"
 etapa = "E2"
@@ -174,6 +186,8 @@ fuente = "investigacion/02-seguridad.md (SEC-30)"
 [[control]]
 id = "SEG-DEPS-EXISTEN"
 titulo = "Dependencias existentes en el registro, con antigüedad mínima y sin typosquat (anti-slopsquatting)"
+titulo_dueno = "Alguna librería del proyecto podría no existir o ser una imitación"
+accion_dueno = "Revisa en el registro oficial que cada librería exista y sea la esperada, y elimina las dudosas."
 alias = ["VC-10", "SEC-05", "ING-03"]
 dominio = "SEG"
 etapa = "E2"
@@ -192,6 +206,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-10); investigacion/02-seg
 [[control]]
 id = "SEG-DEPS-CVE-CRIT"
 titulo = "Sin CVE críticos en dependencias de producción"
+titulo_dueno = "Hay librerías con fallas graves conocidas"
+accion_dueno = "Reemplaza esas librerías por una versión corregida y vuelve a generar el archivo de versiones (lockfile)."
 alias = ["SEC-06"]
 dominio = "SEG"
 etapa = "E2"
@@ -214,6 +230,8 @@ fuente = "investigacion/02-seguridad.md (SEC-06)"
 [[control]]
 id = "SEG-LOCKFILE"
 titulo = "Lockfile comiteado, instalación reproducible en CI y hosts de registro permitidos"
+titulo_dueno = "Falta el archivo que fija las versiones exactas de las librerías"
+accion_dueno = "Agrega el archivo de versiones (lockfile) al repositorio e instala con el modo estricto (npm ci)."
 alias = ["VC-11", "SEC-04"]
 dominio = "SEG"
 etapa = "E2"
@@ -233,6 +251,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-11); investigacion/02-seg
 [[control]]
 id = "SEG-SAST-INY"
 titulo = "Sin inyección (NoSQL, comandos, código), XSS, eval ni path traversal"
+titulo_dueno = "Hay código que ejecuta o muestra lo que escribe el usuario sin filtrarlo"
+accion_dueno = "Revisa cada lugar señalado: valida y escapa los datos en el servidor y usa las funciones propias del framework."
 alias = ["VC-09", "SEC-07", "ECO-03"]
 dominio = "SEG"
 etapa = "E2"
@@ -276,6 +296,8 @@ fuente = "investigacion/02-seguridad.md (SEC-08); investigacion/07-repos-skills-
 [[control]]
 id = "SEG-AUTH-CLIENTE"
 titulo = "La autorización no depende solo del estado del cliente (localStorage, contexto de React)"
+titulo_dueno = "Los permisos se deciden en el navegador y no en el servidor"
+accion_dueno = "Protege cada petición en el servidor (o con RLS): ocultar botones o pantallas no protege los datos."
 alias = ["VC-07"]
 dominio = "SEG"
 etapa = "E2"
@@ -295,6 +317,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-07)"
 [[control]]
 id = "SEG-IDOR"
 titulo = "Autorización por objeto (BOLA/IDOR) en cada endpoint con ID"
+titulo_dueno = "Una persona podría ver o cambiar datos de otra cambiando un número en la dirección"
+accion_dueno = "Revisa que el servidor compruebe, en cada petición con un identificador, que el dato es de quien lo pide."
 alias = ["VC-08", "SEC-10", "ECO-08"]
 dominio = "SEG"
 etapa = "E2"
@@ -313,6 +337,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-08); investigacion/02-seg
 [[control]]
 id = "SEG-BFLA"
 titulo = "Autorización por función: rutas de administración protegidas en el servidor; sin /admin público"
+titulo_dueno = "Hay rutas de administración o de depuración abiertas sin verificar quién entra"
+accion_dueno = "Protege en el servidor cada ruta de administración o depuración con inicio de sesión y rol, o elimínala del despliegue."
 alias = ["SEC-11", "VC-23"]
 dominio = "SEG"
 etapa = "E2"
@@ -389,6 +415,8 @@ fuente = "investigacion/08-vacios-critico.md (GAP-16)"
 [[control]]
 id = "SEG-AGENTES-IA"
 titulo = "Agentes y MCP del proyecto sin service_role, sin escritura en producción ni auto-aprobación; con guardarraíles"
+titulo_dueno = "El agente de IA del proyecto tiene permisos de más"
+accion_dueno = "Quita los permisos amplios y la autoaprobación del agente, y saca las claves de su configuración."
 alias = ["VC-15", "ECO-20", "GAP-45"]
 dominio = "SEG"
 etapa = "E1"
@@ -443,6 +471,8 @@ fuente = "investigacion/02-seguridad.md (SEC-35); investigacion/06-ingenieria-so
 [[control]]
 id = "SEG-PAGOS-FIRMA"
 titulo = "Webhook de pagos verifica la firma con el cuerpo crudo"
+titulo_dueno = "El aviso de pago no comprueba que venga de verdad del proveedor"
+accion_dueno = "Revisa que el webhook de pagos valide la firma del proveedor con el cuerpo original de la petición."
 alias = ["GAP-10"]
 dominio = "SEG"
 etapa = "E2"
@@ -462,6 +492,8 @@ fuente = "investigacion/08-vacios-critico.md (GAP-10)"
 [[control]]
 id = "SEG-PAGOS-SERVIDOR"
 titulo = "Webhook idempotente por event.id; monto y estado de pago decididos por el servidor; checkout alojado"
+titulo_dueno = "El monto o el estado del pago lo decide el navegador"
+accion_dueno = "Revisa que el servidor calcule el monto a partir del producto y no acepte el que envía el navegador."
 alias = ["GAP-11", "GAP-12", "GAP-13"]
 dominio = "SEG"
 etapa = "E2"
@@ -610,6 +642,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-20); investigacion/02-seg
 [[control]]
 id = "SEG-CORS"
 titulo = "CORS con orígenes explícitos; sin * con credenciales"
+titulo_dueno = "El servidor acepta peticiones con sesión desde cualquier sitio"
+accion_dueno = "Reemplaza el comodín por la lista de sitios permitidos."
 alias = ["SEC-21"]
 dominio = "SEG"
 etapa = "E4"
@@ -628,6 +662,8 @@ fuente = "investigacion/02-seguridad.md (SEC-21)"
 [[control]]
 id = "SEG-ERRORES"
 titulo = "Errores sin trazas al cliente; sin catch vacíos ni promesas flotantes; fail-closed en auth y pagos"
+titulo_dueno = "Hay errores que se esconden sin dejar rastro"
+accion_dueno = "Revisa cada bloque que atrapa errores sin hacer nada: registra el error y muestra al usuario un mensaje general."
 alias = ["VC-17", "SEC-22"]
 dominio = "SEG"
 etapa = "E2"
@@ -666,6 +702,8 @@ fuente = "investigacion/02-seguridad.md (SEC-32, SEC-33)"
 [[control]]
 id = "SEG-CICD"
 titulo = "Workflows de CI/CD con acciones fijadas a SHA, permisos mínimos y sin pull_request_target inseguro"
+titulo_dueno = "La automatización de GitHub tiene permisos amplios o usa acciones sin versión fija"
+accion_dueno = "Revisa los archivos de `.github/workflows/`: fija cada acción a una versión exacta y reduce los permisos."
 alias = ["SEC-25", "INF-14", "ECO-13"]
 dominio = "SEG"
 etapa = "E4"
@@ -796,6 +834,8 @@ fuente = "investigacion/02-seguridad.md (SEC-38)"
 [[control]]
 id = "SEG-SBOM"
 titulo = "SBOM generado y versionado en cada release"
+titulo_dueno = "Falta la lista de componentes de cada versión (SBOM)"
+accion_dueno = "Agrega la generación del SBOM en cada versión publicada."
 alias = ["SEC-26"]
 dominio = "SEG"
 etapa = "E4"
@@ -878,6 +918,8 @@ fuente = "investigacion/02-seguridad.md (SEC-40)"
 [[control]]
 id = "DAT-SQL-CONCATENADO"
 titulo = "Sin SQL concatenado con entrada del usuario"
+titulo_dueno = "Una búsqueda arma la consulta a la base de datos pegando lo que escribe el usuario"
+accion_dueno = "Reemplaza esa consulta por una con parámetros."
 alias = ["DB-08"]
 dominio = "DAT"
 etapa = "E2"
@@ -902,6 +944,8 @@ fuente = "investigacion/03-bases-de-datos.md (DB-08)"
 [[control]]
 id = "DAT-PII-REPO"
 titulo = "Datos personales o de salud versionados en el repositorio"
+titulo_dueno = "Hay datos personales o de salud guardados en el proyecto"
+accion_dueno = "Saca ese archivo del proyecto y reemplázalo por datos inventados."
 # DECISIONES.md #3 (generalizada): carpetas y archivos de config/confidencial.toml. El chequeo usa solo
 # metadatos (git ls-files, lstat); la evidencia es ruta y conteo, nunca contenido.
 alias = []
@@ -954,6 +998,8 @@ fuente = "DECISIONES.md #12 (ronda 6); DECISIONES.md #3; Ley 19.628 (señal de r
 [[control]]
 id = "DAT-RLS-ON"
 titulo = "RLS habilitado en todas las tablas expuestas por la API"
+titulo_dueno = "Hay tablas de la base de datos sin protección por usuario (RLS)"
+accion_dueno = "Protege cada tabla expuesta: activa RLS y crea reglas que filtren por el usuario dueño."
 alias = ["VC-01", "SEC-09", "DB-01", "ECO-05"]
 dominio = "DAT"
 etapa = "E2"
@@ -976,6 +1022,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-01); investigacion/02-seg
 [[control]]
 id = "DAT-RLS-PERMISIVA"
 titulo = "Sin políticas USING(true)/WITH CHECK(true) en datos de usuario ni tablas con RLS sin políticas"
+titulo_dueno = "Hay reglas de la base de datos que dejan pasar a cualquiera"
+accion_dueno = "Reemplaza las reglas que dejan pasar a todos (USING (true)) por reglas que filtren por el usuario dueño."
 alias = ["VC-02", "DB-02"]
 dominio = "DAT"
 etapa = "E2"
@@ -1065,6 +1113,8 @@ fuente = "DECISIONES.md #12 (adenda 2); splinter lint 0008 (rls_enabled_no_polic
 [[control]]
 id = "DAT-ANON-NEGATIVA"
 titulo = "Con la clave anon y sin sesión no se lee ni escribe ninguna tabla privada"
+titulo_dueno = "Sin iniciar sesión se podría leer o escribir una tabla privada"
+accion_dueno = "Protege las tablas privadas para que la clave pública (anon) no pueda leerlas ni escribirlas."
 alias = ["VC-03"]
 dominio = "DAT"
 etapa = "E3"
@@ -1145,6 +1195,8 @@ fuente = "investigacion/03-bases-de-datos.md (DB-22)"
 [[control]]
 id = "DAT-ESQUEMA-VERSIONADO"
 titulo = "Esquema versionado: migraciones en el repo y diff vacío contra producción"
+titulo_dueno = "El esquema de la base de datos no está guardado en el proyecto"
+accion_dueno = "Crea migraciones versionadas en el proyecto y aplica los cambios solo por esa vía."
 alias = ["DB-09"]
 dominio = "DAT"
 etapa = "E2"
@@ -1258,6 +1310,8 @@ fuente = "investigacion/03-bases-de-datos.md (DB-04)"
 [[control]]
 id = "DAT-MIGRACIONES-SEGURAS"
 titulo = "Migraciones sin locks largos ni operaciones destructivas sin guarda"
+titulo_dueno = "Hay migraciones de la base de datos que pueden borrar datos o trabarla"
+accion_dueno = "Revisa esas migraciones: agrega una guarda antes de borrar o cambiar columnas y evita bloqueos largos."
 alias = ["VC-14", "DB-10", "ECO-11"]
 dominio = "DAT"
 etapa = "E2"
@@ -1280,6 +1334,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-14); investigacion/03-bas
 [[control]]
 id = "DAT-FK-INDICE"
 titulo = "Claves foráneas indexadas"
+titulo_dueno = "Hay relaciones entre tablas sin índice"
+accion_dueno = "Agrega un índice a cada clave foránea señalada."
 alias = ["DB-13"]
 dominio = "DAT"
 etapa = "E2"
@@ -1561,6 +1617,8 @@ fuente = "investigacion/03-bases-de-datos.md (DB-29)"
 [[control]]
 id = "COD-REPRO"
 titulo = "Repositorio git con arranque reproducible desde el README"
+titulo_dueno = "No queda claro cómo instalar y arrancar el proyecto desde cero"
+accion_dueno = "Agrega al README los pasos para instalar, configurar y arrancar el proyecto en una máquina limpia."
 alias = ["ING-01"]
 dominio = "COD"
 etapa = "E2"
@@ -1654,6 +1712,8 @@ fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-06); investigacion/
 [[control]]
 id = "COD-CI-BASICO"
 titulo = "CI que corre lint, typecheck y tests en cada push o PR"
+titulo_dueno = "No hay una revisión automática que corra en cada cambio"
+accion_dueno = "Agrega un flujo que corra las pruebas en cada cambio."
 alias = ["ING-07"]
 dominio = "COD"
 etapa = "E4"
@@ -1673,6 +1733,8 @@ fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-07)"
 [[control]]
 id = "COD-TESTS-HUMO"
 titulo = "Tests de humo de los flujos críticos"
+titulo_dueno = "Faltan pruebas básicas de los flujos principales"
+accion_dueno = "Agrega pruebas de humo de los flujos principales."
 alias = []
 dominio = "COD"
 etapa = "E3"
@@ -1693,6 +1755,8 @@ fuente = "PLAN_MAESTRO.md §4.3"
 [[control]]
 id = "COD-DOC-AGENTE"
 titulo = "README de arranque en 5 pasos o menos y CLAUDE.md/AGENTS.md con la arquitectura"
+titulo_dueno = "Falta la guía de arranque o la guía para el agente de IA"
+accion_dueno = "Crea un README corto de arranque y un CLAUDE.md o AGENTS.md con la arquitectura."
 alias = ["GAP-42"]
 dominio = "COD"
 etapa = "E1"
@@ -1748,6 +1812,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-18)"
 [[control]]
 id = "COD-DUPLICACION"
 titulo = "Duplicación de código bajo el umbral"
+titulo_dueno = "Hay código repetido en varios lugares"
+accion_dueno = "Revisa los bloques repetidos y reúnelos en una sola función."
 alias = ["VC-19", "ING-10"]
 dominio = "COD"
 etapa = "E2"
@@ -1767,6 +1833,8 @@ fuente = "investigacion/01-fallas-ia-vibecoding.md (VC-19); investigacion/06-ing
 [[control]]
 id = "COD-COMPLEJIDAD"
 titulo = "Complejidad por función y tamaño de archivos bajo el umbral"
+titulo_dueno = "Hay funciones o archivos demasiado largos o enredados"
+accion_dueno = "Revisa los más largos y divídelos en partes más simples."
 alias = ["ING-11", "GAP-46"]
 dominio = "COD"
 etapa = "E2"
@@ -1789,6 +1857,8 @@ fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-11); investigacion/
 [[control]]
 id = "COD-CICLOS-MUERTO"
 titulo = "Sin ciclos de dependencias ni código muerto relevante"
+titulo_dueno = "Hay código sin usar o importaciones en círculo"
+accion_dueno = "Elimina el código que no se usa y corta las importaciones en círculo."
 alias = ["ING-12"]
 dominio = "COD"
 etapa = "E2"
@@ -1848,6 +1918,8 @@ fuente = "investigacion/06-ingenieria-software-ciclo.md (ING-15)"
 [[control]]
 id = "COD-LICENCIAS"
 titulo = "Licencias de dependencias, código y assets compatibles con el modelo de distribución"
+titulo_dueno = "Alguna licencia de librerías o recursos podría no calzar con tu forma de distribuir la app"
+accion_dueno = "Revisa las licencias señaladas antes de publicar o vender la app."
 alias = ["GAP-39", "GAP-40", "GAP-41"]
 dominio = "COD"
 etapa = "E2"
@@ -3125,6 +3197,8 @@ fuente = "investigacion/08-vacios-critico.md (GAP-28)"
 [[control]]
 id = "OPS-ERROR-TRACKING"
 titulo = "Error tracking instalado (Sentry o equivalente)"
+titulo_dueno = "No hay registro de errores de la app en uso"
+accion_dueno = "Agrega un registro de errores que no guarde datos personales."
 alias = ["INF-08"]
 dominio = "OPS"
 etapa = "E5"
@@ -3143,6 +3217,8 @@ fuente = "investigacion/04-infra-escalabilidad-carga.md (INF-08)"
 [[control]]
 id = "OPS-HEALTH"
 titulo = "Endpoint de health check"
+titulo_dueno = "No hay una dirección para saber si la app está funcionando"
+accion_dueno = "Agrega una ruta de salud (health check) que responda si la app funciona."
 alias = ["INF-09"]
 dominio = "OPS"
 etapa = "E5"

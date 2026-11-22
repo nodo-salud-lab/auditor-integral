@@ -988,13 +988,22 @@ def _ubicacion_de(control, hallazgos):
     return None
 
 
-def seccion_que_hacer(rm, hallazgos, siguiente, maximo=10, por_que=None):
-    """Hoja de ruta corta: críticos, luego lo que falla para el siguiente nivel, luego lo que falta evaluar."""
-    items = list((rm or {}).get("items") or [])
+def seccion_que_hacer(rm, hallazgos, siguiente, maximo=10, por_que=None, excluir=(), primeros=()):
+    """Hoja de ruta corta: críticos, luego lo que falla para el siguiente nivel, luego lo que falta evaluar.
+    excluir: controles que la portada ya listó en «Qué hacer hoy» (R10: no se repiten; un ítem con bloqueo pendiente
+    de IA se muestra igual, DECISIONES.md #10).
+    primeros: orden de los bloqueos de la portada (R10d): dentro del Paso 1 esos controles van primero y en ese orden,
+    así el ítem 1 coincide con «Lo primero» de la cabecera. Solo reordena el Paso 1 (roadmap.json no cambia)."""
+    items = [i for i in (rm or {}).get("items") or []
+             if i["control"] not in excluir or (i.get("bloqueo") or {}).get("pendiente_ia")]
+    if not items and excluir:
+        return "Nada más por ahora: lo urgente está en «Qué hacer hoy», en la portada."
     if not items:
         return "Nada urgente: no hay críticos abiertos ni controles pendientes del siguiente nivel."
     por_que = por_que or {}
     criticos = [i for i in items if i["estado"] == "fail" and i["severidad"] == "critica"]
+    pos = {c: k for k, c in enumerate(primeros)}
+    criticos.sort(key=lambda i: pos.get(i["control"], len(pos)))   # estable: el resto conserva el orden del roadmap
     fallas = [i for i in items if i["estado"] == "fail" and i["severidad"] != "critica"]
     pend = [i for i in items if i["estado"] != "fail"]
     pasos = (("Paso 1 — Críticos (antes que cualquier otra cosa)", criticos),
@@ -1027,11 +1036,15 @@ def seccion_que_hacer(rm, hallazgos, siguiente, maximo=10, por_que=None):
             salida.append(f"   - Verificar: {_celda(i['verificacion'])}")
     if len(items) > n:
         salida.append(f"\n… y {len(items) - n} más en `hoja-de-ruta.md`.")
+    if excluir:
+        salida.insert(0, "Lo listado en «Qué hacer hoy» (portada) no se repite aquí.")
     return "\n".join(salida).strip()
 
 
-def validar_redaccion(r, rm):
-    """(True, None) si el texto del redactor-dueno se puede usar; si no, (False, motivo). No admite controles nuevos."""
+def validar_redaccion(r, rm, revisados=None):
+    """(True, None) si el texto del redactor-dueno se puede usar; si no, (False, motivo). No admite controles nuevos.
+    R10: tampoco admite palabras prohibidas de la portada y, si se da revisados=(r, a), el resumen debe decir «r de a»
+    (cuántos puntos se revisaron de los que aplican)."""
     if not isinstance(r, dict):
         return False, "no es un objeto JSON"
     if set(r) != {"agente", "resumen", "por_que_importa", "modelo"}:
@@ -1046,6 +1059,12 @@ def validar_redaccion(r, rm):
         return False, "resumen de más de 200 palabras"
     if not isinstance(r["por_que_importa"], dict):
         return False, "por_que_importa no es un objeto"
+    for texto in [r["resumen"], *[t for t in r["por_que_importa"].values() if isinstance(t, str)]]:
+        prohibidas = palabras_prohibidas(texto)
+        if prohibidas:
+            return False, f"usa palabras prohibidas ({', '.join(prohibidas)})"
+    if revisados is not None and f"{revisados[0]} de {revisados[1]}" not in r["resumen"]:
+        return False, f"el resumen no dice cuántos puntos se revisaron («{revisados[0]} de {revisados[1]}»)"
     controles = {i["control"] for i in (rm or {}).get("items") or []}
     for cid, texto in r["por_que_importa"].items():
         if cid not in controles:
@@ -1055,7 +1074,8 @@ def validar_redaccion(r, rm):
     return True, None
 
 
-def secciones_dueno(valores, rm, estados, indice, veredictos, herr_ok, redaccion, motivo_red, siguiente, hallazgos):
+def secciones_dueno(valores, rm, estados, indice, veredictos, herr_ok, redaccion, motivo_red, siguiente, hallazgos,
+                    excluir=()):
     """Valores de resumen-dueno.md.tmpl: lenguaje llano; el texto del redactor solo si validó."""
     pend = _pendientes(estados)
     criticos = sum(1 for i in rm["items"] if i["estado"] == "fail" and i["severidad"] == "critica")
@@ -1082,9 +1102,12 @@ def secciones_dueno(valores, rm, estados, indice, veredictos, herr_ok, redaccion
     cuenta = _conteo_pendientes(pend, indice)
     falta = "\n".join(f"- {llano[c]}: {cuenta[c]} punto(s)" for c, _ in GRUPOS_PENDIENTES if c in cuenta) \
         or "- Nada pendiente."
-    hacer = seccion_que_hacer(rm, hallazgos, siguiente, maximo=5, por_que=(redaccion or {}).get("por_que_importa"))
+    hacer = seccion_que_hacer(rm, hallazgos, siguiente, maximo=5, por_que=(redaccion or {}).get("por_que_importa"),
+                              excluir=excluir)
+    # R10: el texto del redactor (si validó) va debajo de la portada; nunca reemplaza el estado ni los números.
+    texto_redactor = f"{resumen}\n\n" if redaccion else ""
     return {"resumen": resumen, "nota_redactor": nota, "que_hizo_dueno": hizo, "que_falta_dueno": falta,
-            "que_hacer_dueno": hacer}
+            "que_hacer_dueno": hacer, "texto_redactor": texto_redactor}
 
 
 def _lit(t):
@@ -1122,6 +1145,919 @@ def descartes_humanos_dueno(r):
     if n_av:
         texto += f" {n_av} registro(s) no se aplicaron (incompletos o ya no coinciden): ver el informe, sección 6c."
     return texto
+
+
+# ------------------------------------------------------------------------------------------------------------------
+# R10: portada para la persona dueña («primero el dueño»). Solo reordena y traduce datos que ya existen en gates.json,
+# estado.json, hallazgos.jsonl, score.json, normalizacion.json y roadmap.json: no cambia el estado, el nivel, los
+# bloqueos ni listo_datos_reales. Es plantilla (sin IA). Nunca imprime `evidencia`: solo archivo:línea.
+# ------------------------------------------------------------------------------------------------------------------
+from checks import comun as _checks_comun  # noqa: E402  (criterio único de «código de test»)
+
+ESTADO_ARREGLAR, ESTADO_CONFIRMAR, ESTADO_AMBAR, ESTADO_GRIS = "arreglar", "confirmar", "ambar", "gris"
+# R10c: carpeta sin código reconocible y sin bloqueos (color gris): no se habla como si hubiera una app revisada.
+ESTADO_SIN_CODIGO = "sin_codigo"
+ETIQUETA_SIN_CODIGO = "NO HAY CÓDIGO QUE AUDITAR"
+ETIQUETA_ARREGLAR = "HAY QUE ARREGLAR YA"
+ETIQUETA_CONFIRMAR = "HAY QUE CONFIRMAR HOY (posible falsa alarma)"
+ETIQUETA_GRIS = "NO PUDIMOS REVISAR LO ESENCIAL"
+ETIQUETA_NIVEL = "SIN BLOQUEOS Y NIVEL {nd} DEMOSTRADO"
+ETIQUETA_PARCIAL = "SIN BLOQUEOS ENCONTRADOS, REVISIÓN PARCIAL"
+VARIANTES_PORTADA = ("informe", "dueno", "hoja")
+PRUEBA_FIRME, PRUEBA_POR_CONFIRMAR, PRUEBA_POR_CONFIRMAR_IA = "firme", "por_confirmar", "por_confirmar_ia"
+RAZON_PRUEBA = {
+    PRUEBA_POR_CONFIRMAR: "aparece solo en archivos de prueba y el detector no está seguro",
+    PRUEBA_POR_CONFIRMAR_IA: "la IA cree que puede ser falsa alarma; no se descarta hasta que lo mire una persona"}
+# R10b: en CONFIRMAR la única acción de cada bloqueo es confirmarlo (la regla «si es real, cámbiala hoy» va en
+# «Cómo confirmarlo»). R10c: en ARREGLAR un bloqueo por confirmar se confirma primero y, si es real, se arregla
+# (ACCION_CONFIRMAR_ARREGLAR), con el mismo bloque «Cómo confirmarlo».
+ACCION_CONFIRMAR = "Confírmalo hoy"
+ACCION_CONFIRMAR_ARREGLAR = "Confirma hoy si es real ({razon}); si lo es, {accion}"
+# R10b: estados de normalizacion.json que significan «la herramienta no corrió» (para avisar en P1 y en GRIS).
+HERR_NO_CORRIO = ("ausente", "timeout", "error")
+HERR_P1 = ("gitleaks", "semgrep")   # herramientas cuya ausencia se avisa en P1 de ARREGLAR/CONFIRMAR
+TEXTO_SIN_CODIGO = "No encontramos código que auditar: revisa que la carpeta sea la correcta"
+# Palabras que la portada (y el texto del redactor-dueno) no puede usar: sugieren aprobación sin evidencia o son jerga.
+PALABRAS_PROHIBIDAS = ("seguro", "segura", "aprobado", "limpio", "sin problemas", "está bien", "verificado", "OK",
+                       "verde", "pass", "fail", "no_evaluado", "gate", "control")
+# Excepciones exactas (frases fijas de la plantilla que niegan o acotan; «no está seguro» habla del detector).
+FRASES_PERMITIDAS = ("Esto NO significa que la app sea segura", "no certifica seguridad",
+                     "no significa que esté bien", "el detector no está seguro")
+VERBOS_ACCION_DUENO = ("Cambia", "Saca", "Quita", "Protege", "Agrega", "Crea", "Revisa", "Reemplaza", "Elimina",
+                       "Responde", "Permite", "Corre", "Confírmalo", "Confirma")
+ACCION_SIN_TEXTO = "Ver el detalle en el informe técnico."
+TITULO_SIN_TEXTO = "Un punto del informe técnico"
+_RE_EMOJI = re.compile("[☀-➿⬀-⯿️\U0001F000-\U0001FAFF]")
+_RE_CODIGO_MD = re.compile(r"`[^`\n]*`")
+_RE_CODIGO_CONTROL = re.compile(r"\b(?:SEG|DAT|COD|UX|INF|ESC|OPS)-[A-Z0-9]")
+# un `código` que es exactamente un id de control (p. ej. `SEG-SECRETO-REPO`) sigue contando como código de control;
+# cualquier otro `código` (rutas como `data/DAT-2024-pacientes.csv`) se quita antes de buscar (R10b, defecto 1).
+_RE_ID_CONTROL = re.compile(r"(?:SEG|DAT|COD|UX|INF|ESC|OPS)(?:-[A-Z0-9]+)+")
+_REMEDIACION_GENERICA = ("Cumplir «", "Corregir el incumplimiento")
+NOMBRE_SEVERIDAD = (("critica", "Crítica"), ("alta", "Alta"), ("media", "Media"), ("baja", "Baja"),
+                    ("info", "Informativa"))
+NOMBRE_MODO = {"rapido": "rápido", "estandar": "estándar", "profundo": "profundo"}
+CATS_NO_DEMOSTRABLE_N = ("levantar_app", "juicio_ia", "verificacion_humana", "entrevista")
+# MOTIVO_LLANO: (clave, singular, plural) de por qué un punto grave quedó sin revisar; el orden es el de desempate.
+MOTIVOS_LLANOS = (
+    ("sin_red", "sin internet", "sin internet"),
+    ("fp_ia", "con una alarma de la que la IA dudó (debe mirarla una persona)",
+     "con alarmas de las que la IA dudó (debe mirarlas una persona)"),
+    ("juicio_ia", "necesita revisión con IA", "necesitan revisión con IA"),
+    ("levantar_app", "necesita la app funcionando", "necesitan la app funcionando"),
+    ("base_datos", "necesita acceso a la base de datos", "necesitan acceso a la base de datos"),
+    ("instalar", "necesita una herramienta que falta en este equipo",
+     "necesitan una herramienta que falta en este equipo"),
+    ("reintentar", "quedó así porque una herramienta no terminó a tiempo o falló: repite la auditoría",
+     "quedaron así porque una herramienta no terminó a tiempo o falló: repite la auditoría"),
+    ("no_demostrable", "no se puede demostrar mirando el código", "no se pueden demostrar mirando el código"),
+    ("entrevista", "necesita tus respuestas sobre la app", "necesitan tus respuestas sobre la app"),
+    ("persona", "debe revisarlo una persona", "debe revisarlos una persona"),
+    ("evidencia", "se revisó pero la herramienta no dejó la prueba que se pide para darlo por bueno",
+     "se revisaron pero las herramientas no dejaron la prueba que se pide para darlos por buenos"),
+)
+HERR_BASE_DATOS = ("splinter", "esquema_resumen")
+LLANO_PENDIENTE = {"instalar": "instalar herramientas que faltan", "entrevista": "responder preguntas sobre la app",
+                   "levantar_app": "auditar con la app en marcha", "fp_ia": "que una persona mire alarmas que la IA dudó",
+                   "verificacion_humana": "la revisión de una persona", "juicio_ia": "la revisión asistida por IA",
+                   "modo": "una auditoría más completa",
+                   "reintentar": "repetir la auditoría, porque una herramienta no terminó a tiempo o falló",
+                   "evidencia": "más pruebas de las que hoy hay"}
+
+
+class PortadaInvalida(ValueError):
+    """La portada no cumple sus reglas (palabras prohibidas, códigos en la variante dueno, línea P4.b ausente)."""
+
+
+def plural(n, singular, plural_):
+    return singular if n == 1 else plural_
+
+
+def _minuscula(t):
+    return t[:1].lower() + t[1:] if t and not t.startswith("`") and not t[:2].isupper() else t
+
+
+def _sin_punto(t):
+    return (t or "").rstrip().rstrip(".")
+
+
+def palabras_prohibidas(texto):
+    """Palabras prohibidas presentes en `texto` (fuera de `código` y de las frases permitidas), más «emoji»."""
+    t = _RE_CODIGO_MD.sub(" ", texto or "")
+    for f in FRASES_PERMITIDAS:
+        t = t.replace(f, " ")
+    hallado = [p for p in PALABRAS_PROHIBIDAS
+               if re.search(r"(?<![\w-])" + re.escape(p) + r"(?![\w-])", t, re.IGNORECASE)]
+    if _RE_EMOJI.search(t):
+        hallado.append("emoji")
+    return hallado
+
+
+def _texto_apto(texto, defecto):
+    texto = utiles.una_linea(texto or "").strip()
+    return texto if texto and not palabras_prohibidas(texto) else defecto
+
+
+def titulo_dueno(cid, indice):
+    c = indice.get(cid) or {}
+    return _sin_punto(_texto_apto(c.get("titulo_dueno") or c.get("titulo"), TITULO_SIN_TEXTO))
+
+
+# R10c: controles cuyo titulo_dueno del catálogo cubre varios casos; la subregla del hallazgo (fuente[].regla, la que
+# escribió el check) dice cuál ocurrió. Se usan el título y la acción de cada caso presente (unidos con «y» /
+# «Además,», en el orden de este diccionario: lo más urgente primero); sin ningún caso reconocido, los textos neutrales
+# del catálogo.
+TITULOS_POR_REGLA = {
+    "check:archivos_clave.env_comiteado": (
+        "El archivo `.env` con valores reales está guardado en el repositorio",
+        "Saca `.env` del repositorio, agrégalo a `.gitignore` y cambia las claves que tenía: quedaron en el historial."),
+    "check:archivos_clave.env_no_ignorado": (
+        "El archivo `.env` con valores reales no está excluido del repositorio",
+        "Agrega `.env` a `.gitignore` antes del próximo commit."),
+    "check:archivos_clave.env_ejemplo_ausente": (
+        "Falta un archivo de ejemplo de configuración (`.env.example`)",
+        "Crea `.env.example` con los nombres de las variables y valores inventados."),
+}
+
+
+def titulo_accion_por_caso(cid, hs, indice, remediaciones=None):
+    """(título, acción) del dueño para un control con sus hallazgos `hs`: los casos concretos que traen los hallazgos
+    (subreglas de TITULOS_POR_REGLA); sin ninguno, los textos del catálogo."""
+    reglas = {str((f or {}).get("regla") or "") for h in hs or [] if h.get("control") in (None, cid)
+              for f in h.get("fuente") or []}
+    casos = [TITULOS_POR_REGLA[r] for r in TITULOS_POR_REGLA if r in reglas]
+    if not casos:
+        return titulo_dueno(cid, indice), accion_dueno(cid, indice, remediaciones)
+    titulo = casos[0][0] + "".join(f" y {_minuscula(t)}" for t, _ in casos[1:])
+    accion = casos[0][1] + "".join(f" Además, {_minuscula(a)}" for _, a in casos[1:])
+    return _sin_punto(_texto_apto(titulo, TITULO_SIN_TEXTO)), _texto_apto(accion, ACCION_SIN_TEXTO)
+
+
+def accion_dueno(cid, indice, remediaciones=None):
+    """accion_dueno del catálogo; si falta, la primera frase de la remediación; con la genérica, el informe técnico."""
+    c = indice.get(cid) or {}
+    if c.get("accion_dueno"):
+        return _texto_apto(c["accion_dueno"], ACCION_SIN_TEXTO)
+    rem = utiles.una_linea((remediaciones or {}).get(cid) or "").strip()
+    if not rem or rem.startswith(_REMEDIACION_GENERICA):
+        return ACCION_SIN_TEXTO
+    primera = re.split(r"(?<=[.:;])\s", rem, maxsplit=1)[0].rstrip(".:;") + "."
+    return _texto_apto(primera, ACCION_SIN_TEXTO)
+
+
+def _remediaciones_catalogo():
+    try:
+        return (utiles.leer_toml(utiles.RAIZ / "plantillas" / "remediaciones.toml") or {}).get("remediacion") or {}
+    except OSError:
+        return {}
+
+
+def motivo_llano(e, indice):
+    """Clave de MOTIVOS_LLANOS de un control sin revisar (la primera regla que se cumple)."""
+    motivo = e.get("motivo") or ""
+    cat, det = clasificar_pendiente(e, indice, {})
+    if "AUDITOR_SIN_RED" in motivo or "sin red" in motivo:
+        return "sin_red"
+    if roadmap_mod.es_motivo_fp_ia(motivo):
+        return "fp_ia"
+    if "juicio LLM" in motivo or cat == "juicio_ia":
+        return "juicio_ia"
+    if cat == "levantar_app":
+        return "levantar_app"
+    if cat == "reintentar":   # R10b: timeout o fallo de una herramienta instalada; antes que no_demostrable/evidencia
+        return "reintentar"
+    if cat == "instalar" and any(h in HERR_BASE_DATOS for h in det or []):
+        return "base_datos"
+    if cat == "instalar":
+        return "instalar"
+    if (indice.get(e["control"]) or {}).get("evidencia_pass") == "no_demostrable_estatico":
+        return "no_demostrable"
+    if cat == "entrevista":
+        return "entrevista"
+    if e.get("estado") == "manual_pendiente":
+        return "persona"
+    return "evidencia"
+
+
+def _conteo_motivos(claves):
+    cuenta = {}
+    for k in claves:
+        cuenta[k] = cuenta.get(k, 0) + 1
+    orden = [m[0] for m in MOTIVOS_LLANOS]
+    return sorted(cuenta.items(), key=lambda kv: (-kv[1], orden.index(kv[0]) if kv[0] in orden else 99))
+
+
+def _texto_motivos(conteo):
+    textos = {k: (s, p) for k, s, p in MOTIVOS_LLANOS}
+    return ", ".join(f"{n} {plural(n, *textos[k])}" for k, n in conteo)
+
+
+def prueba_bloqueo(b, hs):
+    """ESTIMACIÓN de si un bloqueo puede ser falsa alarma. Nunca cambia conteos, estado, nivel ni listo."""
+    if b.get("pendiente_ia"):
+        return PRUEBA_POR_CONFIRMAR_IA
+    archivos = [(h.get("ubicacion") or {}).get("archivo") for h in hs]
+    if (hs and not any(h.get("confianza") == "alta" for h in hs) and all(archivos)
+            and all(_checks_comun.es_test(a) for a in archivos)):
+        return PRUEBA_POR_CONFIRMAR
+    return PRUEBA_FIRME
+
+
+def _regla_generica(hs):
+    return any(str((f or {}).get("regla") or "").startswith("generic") for h in hs for f in h.get("fuente") or [])
+
+
+def _lugar_h(h):
+    u = h.get("ubicacion") or {}
+    if not u.get("archivo"):
+        return None
+    return u["archivo"] + (f":{u['linea']}" if u.get("linea") is not None else "")
+
+
+def _clave_lugar(h):
+    u = h.get("ubicacion") or {}
+    linea = u.get("linea") if isinstance(u.get("linea"), int) else 10 ** 9
+    return (u.get("archivo") is None, u.get("archivo") or "", linea)
+
+
+def sin_codigo(perfil_tecnico):
+    """True si detectar_stack (perfil_tecnico.json) no reconoció nada que auditar: sin lenguajes, frameworks,
+    ecosistemas, Docker, IaC, Kubernetes ni CI, y sin truncar el recorrido. Sin perfil_tecnico → False (no se
+    afirma nada que la corrida no registró)."""
+    p = perfil_tecnico if isinstance(perfil_tecnico, dict) else None
+    if not p or "lenguajes" not in p:
+        return False
+    if (p.get("limites") or {}).get("truncado"):
+        return False
+    return not (p.get("lenguajes") or p.get("frameworks") or p.get("ecosistemas")
+                or any(p.get(k) for k in ("docker", "iac", "k8s", "ci")))
+
+
+def datos_portada(g, estados, hallazgos, s, resumen, rm, indice, modo="estandar", corrida_id="s/d",
+                  proyecto="proyecto", remediaciones=None, perfil_tecnico=None, herramientas_json=None):
+    """Todos los números y textos de la portada, derivados solo de los archivos de la corrida."""
+    remediaciones = _remediaciones_catalogo() if remediaciones is None else remediaciones
+    vacio = sin_codigo(perfil_tecnico)
+    gl = g["global"]
+    por_control = {e["control"]: e for e in estados}
+    est = {e["control"]: e.get("estado") for e in estados}
+    aplicables = [e for e in estados if e.get("estado") != "no_aplica"]
+    revisados = [e for e in aplicables if e.get("estado") in ("pass", "fail")]
+    sin_revisar = [e for e in aplicables if e.get("estado") in ("no_evaluado", "manual_pendiente")]
+    cob_s = ((s or {}).get("global") or {}).get("cobertura")
+    cob = round(len(revisados) / len(aplicables), 3) if aplicables else 0.0
+    inv1 = isinstance(cob_s, (int, float)) and not isinstance(cob_s, bool) and cob == cob_s
+    inv2 = True
+    por_dom = {}
+    for e in aplicables:
+        c = indice.get(e["control"])
+        if c is None or c.get("aviso_legal"):
+            continue
+        d = por_dom.setdefault(c["dominio"], [0, 0])
+        d[0] += 1
+        d[1] += e.get("estado") in ("pass", "fail")
+    for d, dg in (g.get("dominios") or {}).items():
+        niv = (dg or {}).get("niveles") or {}
+        tot = [sum(v.get("aplicables", 0) for v in niv.values()), sum(v.get("evaluados", 0) for v in niv.values())]
+        if tot != por_dom.pop(d, [0, 0]):
+            inv2 = False
+    if any(v != [0, 0] for v in por_dom.values()):
+        inv2 = False
+
+    # bloqueos: un control por bloqueo, tope más bajo primero y luego el orden de roadmap.json
+    pos_rm = {i["control"]: k for k, i in enumerate((rm or {}).get("items") or [])}
+    por_id = {h.get("id"): h for h in hallazgos}
+    bloqueos, vistos = [], set()
+    for k, b in enumerate(gl.get("bloqueos") or []):
+        if b["control"] in vistos:
+            continue
+        vistos.add(b["control"])
+        hs = [por_id[i] for i in b.get("hallazgos") or [] if i in por_id] or \
+             [h for h in hallazgos if h.get("control") == b["control"]]
+        prueba = prueba_bloqueo(b, hs)
+        con_archivo = sorted((h for h in hs if _lugar_h(h)), key=_clave_lugar)
+        extra = len(con_archivo) - 1 if con_archivo else 0
+        archivos_extra = {(h.get("ubicacion") or {}).get("archivo") for h in con_archivo[1:]}
+        titulo_b, accion_b = titulo_accion_por_caso(b["control"], hs, indice, remediaciones)
+        bloqueos.append({"control": b["control"], "tope": b.get("tope"), "orden": (
+            utiles.num_nivel(b.get("tope") or "N5"), pos_rm.get(b["control"], 10 ** 6), k),
+            "tipos": b.get("tipos") or [b.get("tipo")], "prueba": prueba, "generica": _regla_generica(hs),
+            "lugar": _lugar_h(con_archivo[0]) if con_archivo else None, "extra": extra,
+            "extra_archivo": archivos_extra.pop() if extra and len(archivos_extra) == 1 else None,
+            "titulo": titulo_b, "accion": accion_b})
+    bloqueos.sort(key=lambda b: b["orden"])
+    en_bloqueo = {b["control"] for b in bloqueos}
+
+    # puntos graves («que pueden frenar el uso»)
+    graves = []
+    for e in estados:
+        c = indice.get(e["control"]) or {}
+        if c.get("aviso_legal") or e.get("estado") == "no_aplica":
+            continue
+        if (c.get("bloquea_global") or e["control"] in gates_mod.CONTROLES_SECRETO or e["control"] in en_bloqueo
+                or (c.get("dominio") in gates_mod.DOMINIOS_BLOQUEO_CRITICO and c.get("severidad_base") == "critica")):
+            graves.append(e)
+    g_problema = [e for e in graves if e["control"] in en_bloqueo or e.get("estado") == "fail"]
+    g_comprobados = [e for e in graves if e.get("estado") == "pass" and e["control"] not in en_bloqueo]
+    g_sin_revisar = [e for e in graves if e["control"] not in en_bloqueo
+                     and e.get("estado") in ("no_evaluado", "manual_pendiente")]
+    motivos_graves = {e["control"]: motivo_llano(e, indice) for e in g_sin_revisar}
+    herr_reintentar = sorted({x for e in g_sin_revisar if motivos_graves[e["control"]] == "reintentar"
+                              for x in (clasificar_pendiente(e, indice, {})[1] or [])})
+
+    # temas (un tema = un control con hallazgos abiertos; aviso = cada hallazgo)
+    temas, hs_abiertos = {}, {}
+    for h in hallazgos:
+        if h.get("estado_hallazgo", "abierto") != "abierto":
+            continue
+        hs_abiertos.setdefault(h["control"], []).append(h)
+        t = temas.setdefault(h["control"], {"control": h["control"], "sev": "info", "avisos": 0, "en_prueba": 0})
+        if utiles.rango_severidad(h.get("severidad")) < utiles.rango_severidad(t["sev"]):
+            t["sev"] = h.get("severidad")
+        t["avisos"] += 1
+        archivo = (h.get("ubicacion") or {}).get("archivo")
+        t["en_prueba"] += bool(archivo and _checks_comun.es_test(archivo))
+    n_fail = sum(1 for e in estados if e.get("estado") == "fail")
+    inv_temas = len(temas) == n_fail
+    filas = {sev: [sum(1 for t in temas.values() if t["sev"] == sev),
+                   sum(t["avisos"] for t in temas.values() if t["sev"] == sev)] for sev, _ in NOMBRE_SEVERIDAD}
+    otros = sorted((t for t in temas.values() if t["control"] not in en_bloqueo),
+                   key=lambda t: (utiles.rango_severidad(t["sev"]),
+                                  utiles.num_nivel((indice.get(t["control"]) or {}).get("gate") or "N5"),
+                                  -t["avisos"], t["control"]))
+    for t in otros:
+        t["titulo"], t["accion"] = titulo_accion_por_caso(t["control"], hs_abiertos.get(t["control"]), indice,
+                                                          remediaciones)
+
+    # nivel siguiente (P5)
+    nd = gl["nivel_demostrado"]
+    sig = utiles.NIVELES[utiles.num_nivel(nd) + 1] if utiles.num_nivel(nd) < 5 else None
+    n_sig = None
+    if sig:
+        niv = [((dg or {}).get("niveles") or {}).get(sig) or {} for dg in (g.get("dominios") or {}).values()]
+        pend = sorted({c for v in niv for c in v.get("pendientes") or []})
+        fallidos = sorted({c for v in niv for c in v.get("fallidos") or []})
+        ne = [c for c in pend if (indice.get(c) or {}).get("evidencia_pass") == "no_demostrable_estatico"
+              or (c in por_control and clasificar_pendiente(por_control[c], indice, {})[0] in CATS_NO_DEMOSTRABLE_N)]
+        n_sig = {"nivel": sig, "aplicables": sum(v.get("aplicables", 0) for v in niv),
+                 "evaluados": sum(v.get("evaluados", 0) for v in niv), "fallidos": fallidos, "pendientes": pend,
+                 "no_demostrables": ne}
+
+    herr = (resumen or {}).get("herramientas") or {}
+    # R10c: herramientas que faltan en este equipo (doctor: herramientas.json; o «ausente» en normalizacion.json)
+    doctor = (herramientas_json or {}).get("herramientas") or {}
+    ausentes = {k for k, v in doctor.items() if isinstance(v, dict) and (v.get("estado") == "ausente"
+                                                                       or v.get("disponible") is False)}
+    ausentes |= {k for k, v in herr.items() if (v or {}).get("estado") == "ausente"}
+    herr_instalar = sorted({x for e in g_sin_revisar if motivos_graves[e["control"]] == "instalar"
+                            for x in (clasificar_pendiente(e, indice, {})[1] or [])} & ausentes)
+    gitleaks_estado = (herr.get("gitleaks") or {}).get("estado")
+    gitleaks_ok = gitleaks_estado in ESTADOS_CORRIO
+    herr_no_corrio = [k for k in HERR_P1 if (herr.get(k) or {}).get("estado") in HERR_NO_CORRIO]
+    sin_red = (any("AUDITOR_SIN_RED" in (e.get("motivo") or "") for e in estados)
+               or any((v or {}).get("estado") == "sin_red" for v in herr.values()))
+
+    # estado (una sola regla)
+    faltas_gris = []
+    if bloqueos:
+        estado = ESTADO_ARREGLAR if any(b["prueba"] == PRUEBA_FIRME for b in bloqueos) else ESTADO_CONFIRMAR
+    else:
+        if not gitleaks_ok:
+            faltas_gris.append("gitleaks")
+        if est.get("SEG-SECRETO-REPO") not in ("pass", "fail"):
+            faltas_gris.append("secreto")
+        if len(g_comprobados) + len(g_problema) == 0:
+            faltas_gris.append("graves")
+        # R10c: sin código y sin bloqueos el estado es propio (nunca «revisión parcial» de una app que no hay)
+        estado = ESTADO_SIN_CODIGO if vacio else ESTADO_GRIS if faltas_gris else ESTADO_AMBAR
+    if estado == ESTADO_ARREGLAR:
+        # R10c: «Empieza por el 1» y «Lo primero» apuntan al mismo bloqueo: los firmes primero (solo reordena)
+        bloqueos.sort(key=lambda b: (b["prueba"] != PRUEBA_FIRME, b["orden"]))
+    if estado == ESTADO_SIN_CODIGO:
+        etiqueta = ETIQUETA_SIN_CODIGO
+    elif estado == ESTADO_ARREGLAR:
+        etiqueta = ETIQUETA_ARREGLAR
+    elif estado == ESTADO_CONFIRMAR:
+        etiqueta = ETIQUETA_CONFIRMAR
+    elif estado == ESTADO_GRIS:
+        etiqueta = ETIQUETA_GRIS
+    elif utiles.num_nivel(nd) >= 1:
+        etiqueta = ETIQUETA_NIVEL.format(nd=nd)
+    else:
+        etiqueta = ETIQUETA_PARCIAL
+
+    pend_todos = _pendientes(estados)
+    cuenta_pend = _conteo_pendientes(pend_todos, indice)
+    orden_cat = [c for c, _ in GRUPOS_PENDIENTES]
+    ampliar = sorted(cuenta_pend.items(), key=lambda kv: (-kv[1], orden_cat.index(kv[0]) if kv[0] in orden_cat
+                                                          else 99))[:3]
+    herr_pend = {x for e in pend_todos if clasificar_pendiente(e, indice, {})[0] == "instalar"
+                 for x in (clasificar_pendiente(e, indice, {})[1] or [])}
+    return {
+        "proyecto": proyecto, "corrida": corrida_id, "modo": modo, "sin_red": sin_red, "estado": estado,
+        "etiqueta": etiqueta, "faltas_gris": faltas_gris, "nivel_demostrado": nd, "nivel_siguiente": n_sig,
+        "gitleaks_estado": gitleaks_estado, "herr_no_corrio": herr_no_corrio, "herr_reintentar": herr_reintentar,
+        "sin_codigo": vacio, "herr_instalar": herr_instalar,
+        "ampliar_ausentes": sorted(herr_pend & ausentes), "ampliar_otras": bool(herr_pend - ausentes),
+        "hito_siguiente": f"{sig} ({gates_mod.HITOS[sig]})" if sig else None,
+        "listo": gl.get("listo_datos_reales"), "bloqueos": bloqueos,
+        "revisados": len(revisados), "aplicables": len(aplicables), "cobertura": cob,
+        "invariantes_ok": inv1 and inv2, "invariante_temas": inv_temas,
+        "n_avisos_legales": len(gl.get("avisos_legales") or []),
+        "n_descartes": len(gl.get("descartes_humanos") or []),
+        "graves_aplican": len(graves), "graves_con_problema": len(g_problema),
+        "graves_comprobados": len(g_comprobados), "graves_sin_revisar": len(g_sin_revisar),
+        "motivos_graves": motivos_graves, "filas_temas": filas, "otros_temas": otros, "n_fail": n_fail,
+        "ampliar": ampliar, "titulos": {cid: titulo_dueno(cid, indice) for cid in motivos_graves},
+        "titulos_fallidos": [titulo_accion_por_caso(c, hs_abiertos.get(c), indice, remediaciones)[0]
+                             for c in (n_sig or {}).get("fallidos", [])],
+    }
+
+
+def _linea_bloqueo(n, b, variante, confirmar=False):
+    codigo = f" (`{b['control']}`)" if variante == "informe" else ""
+    lugar = ""
+    if b["lugar"]:
+        lugar = f": {_codigo(b['lugar'])}"
+        if b["extra"]:
+            donde = f" en {_codigo(b['extra_archivo'])}" if b["extra_archivo"] else ""
+            lugar += f" (y {b['extra']} {plural(b['extra'], 'lugar', 'lugares')} más{donde})"
+    generica = (" (regla genérica del detector)" if variante == "informe" and b["generica"] else "")
+    if b["prueba"] == PRUEBA_FIRME:
+        accion = _celda(b["accion"])
+    elif confirmar:
+        # R10b: en CONFIRMAR la única acción es confirmar; «si es real, cámbiala hoy» va en «Cómo confirmarlo»
+        accion = f"{ACCION_CONFIRMAR} ({RAZON_PRUEBA[b['prueba']]})."
+    else:
+        # R10c: en ARREGLAR, un bloqueo por confirmar no se ordena arreglar sin más: primero se confirma
+        accion = ACCION_CONFIRMAR_ARREGLAR.format(razon=RAZON_PRUEBA[b["prueba"]],
+                                                  accion=_minuscula(_celda(b["accion"])))
+    return f"{n}. **{_celda(b['titulo'])}**{codigo}{lugar} — {accion}{generica}"
+
+
+def _lista_y(items, maximo=4):
+    items = list(items)
+    if len(items) > maximo:
+        items = items[:maximo] + [f"{len(items) - maximo} más"]
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " y " + items[-1]
+
+
+def _se_revisan(n, cuales="de esos puntos"):
+    return f"así se {plural(n, 'revisa', 'revisan')} {n} {cuales}"
+
+
+def _lineas_ambar(d, variante="informe"):
+    """P2 en ÁMBAR: una línea por grupo de MOTIVO_LLANO de los graves sin revisar (de mayor a menor). R10c: el verbo
+    es para el dueño y la línea dice qué se gana («así se revisan N»)."""
+    conteo = _conteo_motivos(d["motivos_graves"].values())
+    informe = variante == "informe"
+    lineas = []
+    for k, (motivo, n) in enumerate(conteo, 1):
+        titulos = "; ".join(f"«{_celda(d['titulos'][c])}»" for c, m in sorted(d["motivos_graves"].items())
+                            if m == motivo)
+        reint = d.get("herr_reintentar") or []
+        inst = d.get("herr_instalar") or []
+        texto = {
+            "sin_red": ("**Vuelve a correr la auditoría con internet** ("
+                        + ("quien te ayuda con la parte técnica: sin la opción `--sin-red`" if informe
+                           else "pídeselo a quien te ayuda con la parte técnica")
+                        + f"): {_se_revisan(n)}."),
+            "juicio_ia": (f"**Vuelve a correr la auditoría con revisión asistida por IA**: {_se_revisan(n)}. Lo que "
+                          "diga la IA lo confirma una persona."),
+            "no_demostrable": (f"**Pide a quien te ayuda que confirme a mano** que no "
+                               f"{plural(n, 'pase esto', 'pasen estas cosas')}: {titulos}. Leyendo el código no se "
+                               "puede demostrar."),
+            "reintentar": (f"**Repite la auditoría, con más tiempo si hace falta**: {_se_revisan(n)}. "
+                           + plural(len(reint) or 1, "Una herramienta del auditor no terminó a tiempo o falló",
+                                    "Algunas herramientas del auditor no terminaron a tiempo o fallaron")
+                           + (f" ({', '.join(reint)})." if informe and reint else ".")),
+            "base_datos": (f"**Da acceso de solo lectura a la base de datos en la próxima auditoría**: "
+                           f"{_se_revisan(n)}."),
+            "levantar_app": f"**Pide que la próxima auditoría se haga con la app en marcha**: {_se_revisan(n)}.",
+            "instalar": ((f"**Pide a quien te ayuda que instale {_lista_y(inst)}**" if inst else
+                          "**Pide a quien te ayuda que habilite las herramientas que esta vez no corrieron**")
+                         + (" (`bin/auditar doctor` muestra cuáles faltan)" if informe else "")
+                         + f": {_se_revisan(n)}."),
+            "fp_ia": f"**Pide que una persona mire las alarmas de las que la IA dudó**: {_se_revisan(n)}.",
+            "entrevista": f"**Responde las preguntas sobre tu app**: {_se_revisan(n)}.",
+            # R10d: concordancia con un solo punto («de este punto»)
+            "persona": f"**Pide que una persona revise {plural(n, 'este punto', 'estos puntos')}**: {titulos}.",
+            "evidencia": f"**Pide una revisión a mano de {plural(n, 'este punto', 'estos puntos')}**: {titulos}.",
+        }[motivo]
+        lineas.append(f"{k}. {texto}")
+    return lineas
+
+
+def _llano_ampliar(cat, d):
+    """Texto de «Lo que más ampliaría la revisión» para una categoría. R10c: «instalar» solo nombra herramientas que de
+    verdad faltan en este equipo (doctor o normalizacion.json); sin ninguna ausente no se pide instalar."""
+    if cat != "instalar":
+        return LLANO_PENDIENTE.get(cat, cat)
+    aus, otras = d.get("ampliar_ausentes") or [], d.get("ampliar_otras")
+    if aus:
+        return f"instalar {_lista_y(aus)}" + (", y habilitar otras herramientas que esta vez no corrieron"
+                                              if otras else "")
+    return "habilitar herramientas que esta vez no corrieron"
+
+
+def _texto_gris(d):
+    que = {"gitleaks": "no se pudo usar la herramienta que busca claves secretas",
+           "secreto": "la búsqueda de claves secretas en el proyecto no terminó",
+           "graves": "ninguno de los puntos que pueden frenar el uso quedó revisado"}
+    # R10c: si gitleaks no corrió, que la búsqueda de claves no terminara es la misma causa (no se repite)
+    faltas = [f for f in d["faltas_gris"] if not (f == "secreto" and "gitleaks" in d["faltas_gris"])]
+    return "; ".join(que[f] for f in faltas)
+
+
+def _accion_gris(d):
+    """Lo que sigue a «vuelve a correr la auditoría» en GRIS."""
+    if "gitleaks" in d["faltas_gris"]:
+        # R10b: solo se pide instalar si falta; si está instalada y no terminó a tiempo o falló, se repite
+        if d.get("gitleaks_estado") in ("timeout", "error"):
+            return "con más tiempo (gitleaks está instalada, pero no terminó a tiempo o falló)"
+        return "después de instalar gitleaks (`brew install gitleaks`)"
+    return "después de revisar el detalle técnico"
+
+
+def _codigos_de_control(cuerpo):
+    """Texto donde buscar códigos de control: fuera de `código`, más los `código` que son exactamente un id de control
+    (una ruta como `data/DAT-2024-pacientes.csv` no es un código de control)."""
+    ids = [m.group(0)[1:-1] for m in _RE_CODIGO_MD.finditer(cuerpo) if _RE_ID_CONTROL.fullmatch(m.group(0)[1:-1])]
+    return _RE_CODIGO_MD.sub(" ", cuerpo) + "\n" + " ".join(ids)
+
+
+def validar_portada(texto, estado, variante, proyecto=None):
+    """Lanza PortadaInvalida si la portada rompe sus reglas (fail-closed: mejor un error que un texto engañoso)."""
+    # el nombre del proyecto (dato del dueño) solo aparece en el título: se excluye de la revisión de palabras
+    cuerpo = "\n".join(" " if l.startswith("## Portada — ") else l for l in texto.splitlines())
+    prohibidas = palabras_prohibidas(cuerpo)
+    if prohibidas:
+        raise PortadaInvalida(f"palabras prohibidas en la portada ({variante}): {', '.join(prohibidas)}")
+    if variante in ("dueno", "hoja") and _RE_CODIGO_CONTROL.search(_codigos_de_control(cuerpo)):
+        raise PortadaInvalida(f"la variante {variante} no puede llevar códigos de control")
+    if (variante != "hoja" and estado == ESTADO_AMBAR
+            and not any(l.startswith("- Puntos que pueden frenar el uso:") for l in texto.splitlines())):
+        raise PortadaInvalida("en ÁMBAR la portada debe decir cuántos puntos graves quedaron sin revisar (P4.b)")
+    return texto
+
+
+# R10d: un solo título para la tabla de gravedades en todos los estados (con bloqueos, la tabla los incluye) y una nota
+# cuando la fila «Crítica» es 0 (un 0 no dice nada de lo que no se pudo revisar).
+TITULO_TABLA_PROBLEMAS = "### Problemas encontrados, por gravedad"
+NOTA_SIN_CRITICOS = "Ninguno de gravedad crítica en lo revisado."
+# R10d: en NO HAY CÓDIGO QUE AUDITAR solo se listan hallazgos reales de claves o datos personales
+CONTROLES_SECRETO_PII = tuple(gates_mod.CONTROLES_SECRETO) + ("DAT-PII-REPO", "DAT-PII-TEST")
+
+
+def _lineas_temas(temas, variante):
+    lineas = []
+    for t in temas:
+        prueba = f", {t['en_prueba']} en archivos de prueba" if t["en_prueba"] else ""
+        codigo = f" (`{t['control']}`)" if variante == "informe" else ""
+        lineas.append(f"- **{_celda(t['titulo'])}**{codigo} ({t['avisos']} "
+                      f"{plural(t['avisos'], 'aviso', 'avisos')}{prueba}) — {_celda(t['accion'])}")
+    return lineas
+
+
+def _probados(e1, f1):
+    """«se probaron N y …» del nivel siguiente, con concordancia (R10d: con 0 fallidos no se dice «fallaron 0»)."""
+    if e1 == 0:
+        return "todavía no se probó ninguno"
+    if f1 == 0:
+        return "se probó 1 y salió bien" if e1 == 1 else f"se probaron {e1} y todos salieron bien"
+    if e1 == 1:
+        return "se probó 1 y falló"
+    if f1 == e1:
+        return f"se probaron {e1} y los {e1} fallaron"
+    return f"se probaron {e1} y {plural(f1, 'falló', 'fallaron')} {f1}"
+
+
+def _sin_revisar_nivel(p1, ne1):
+    """Cuántos de los puntos sin revisar del nivel siguiente no se pueden probar leyendo el código (R10d:
+    concordancia; nunca «de los 1» ni «0 no se pueden»)."""
+    if p1 == 1:
+        return f"el que quedó sin revisar {'no ' if ne1 else ''}se puede probar leyendo el código"
+    if ne1 == 0:
+        return f"los {p1} sin revisar se pueden probar leyendo el código"
+    if ne1 == p1:
+        return f"ninguno de los {p1} sin revisar se puede probar leyendo el código"
+    return f"de los {p1} sin revisar, {ne1} no {plural(ne1, 'se puede', 'se pueden')} probar leyendo el código"
+
+
+def _linea_listo(d, estado, nd):
+    listo = {"SI": "SÍ"}.get(d["listo"], d["listo"] or "s/d")
+    if d["listo"] == "NO":
+        motivo = {ESTADO_ARREGLAR: ", por los problemas de arriba, que impiden usar la app.",
+                  ESTADO_CONFIRMAR: ", hasta confirmar la alarma.",
+                  ESTADO_SIN_CODIGO: ": no se auditó ninguna app."}.get(
+            estado, ": no por un bloqueo; falta demostrar "
+            + ("lo mínimo." if utiles.num_nivel(nd) < 1 else "el nivel N2."))
+    elif d["listo"] == "CONDICIONAL":
+        motivo = ": con condiciones (ver «1. Veredicto» en `informe.md`)."
+    else:
+        motivo = "."
+    return f"¿Lista para datos reales de personas? **{listo}**{motivo}"
+
+
+def _resto_sin_codigo(d, variante, nd):
+    """R10d: en NO HAY CÓDIGO QUE AUDITAR, después de P1 y «Qué hacer hoy» no van cifras de cobertura ni la tabla de
+    problemas con recomendaciones de app: solo los hallazgos reales de claves o datos personales (si los hay) y una
+    línea con el nivel, la respuesta sobre datos reales y el aviso legal."""
+    out = []
+    reales = [t for t in d["otros_temas"] if t["control"] in CONTROLES_SECRETO_PII]
+    if reales:
+        out += ["### Lo que sí encontramos en esta carpeta", "", *_lineas_temas(reales, variante), ""]
+    linea = (f"Nivel demostrado: **{nd} de N5** (sin código, no dice nada sobre una app). "
+             + _linea_listo(d, ESTADO_SIN_CODIGO, nd))
+    nl = d["n_avisos_legales"]
+    if nl:
+        donde = "más abajo" if variante == "informe" else "en `informe.md`"
+        linea += (f" Hay {nl} {plural(nl, 'punto legal', 'puntos legales')} que siempre revisa una persona (ver "
+                  f"«Aviso legal» {donde}).")
+    return out + [linea, ""]
+
+
+def _intro_ambar(d):
+    """Primera frase de «Qué hacer hoy» en ÁMBAR: sin bloqueos, pero sin callar los temas de gravedad alta."""
+    if not d["invariante_temas"]:
+        return "No hay bloqueos que arreglar hoy."
+    crit, alta = d["filas_temas"]["critica"][0], d["filas_temas"]["alta"][0]
+    n = crit + alta
+    if not n:
+        return "No hay bloqueos ni problemas de gravedad alta o crítica que arreglar hoy."
+    grav = "alta o crítica" if crit else "alta"
+    # R10d: «gravedad …» solo para remitir a la tabla de gravedades (no compite con «impiden usar la app» de P1)
+    return (f"No hay bloqueos que arreglar hoy; hay {n} {plural(n, 'problema', 'problemas')} de gravedad {grav} "
+            "en la tabla de abajo.")
+
+
+def render_portada(d, variante="informe"):
+    if variante not in VARIANTES_PORTADA:
+        raise ValueError(f"variante desconocida: {variante}")
+    estado, nd = d["estado"], d["nivel_demostrado"]
+    rojo = estado in (ESTADO_ARREGLAR, ESTADO_CONFIRMAR)
+    vacio = bool(d.get("sin_codigo"))
+    por_confirmar = rojo and any(b["prueba"] != PRUEBA_FIRME for b in d["bloqueos"])
+    bl = d["bloqueos"]
+    nb = len(bl)
+    primero = None
+    p2 = []
+    if rojo:
+        for n, b in enumerate(bl[:5], 1):
+            p2.append(_linea_bloqueo(n, b, variante, confirmar=estado == ESTADO_CONFIRMAR))
+        if nb > 5:
+            resto = "; ".join(_minuscula(_celda(b["titulo"])) for b in bl[5:])
+            p2.append(f"\nY {nb - 5} más: {resto}. Lista completa en `hoja-de-ruta.md`.")
+        if por_confirmar:   # R10c: también en ARREGLAR cuando hay al menos un bloqueo por confirmar
+            if variante == "informe":
+                falsa = ("- Si es un valor inventado para pruebas: pide que se registre como falsa alarma "
+                         "(`.auditor-integral/fp-verificados.json`, con nombre, fecha y razón) y vuelve a correr con "
+                         "`--fp-verificados`.")
+            else:
+                falsa = ("- Si es un valor inventado para pruebas: pídele a quien te ayuda con la parte técnica que la "
+                         "registre como falsa alarma (con nombre, fecha y razón) y vuelve a correr la auditoría.")
+            p2 += ["", "**Cómo confirmarlo:**",
+                   "- Si es una clave o dato real: **cámbiala en el servicio hoy mismo**, luego sácala del archivo.",
+                   falsa]
+        if estado == ESTADO_CONFIRMAR:
+            primero = (f"confirma hoy si «{_celda(bl[0]['titulo'])}» es real (ver «Cómo confirmarlo» en "
+                       "`resumen-dueno.md`)")
+        else:
+            firme = next(b for b in bl if b["prueba"] == PRUEBA_FIRME)
+            # R10e: la cabecera de la hoja va sola: nombra el problema y dónde, no solo la acción
+            donde = f" ({_codigo(firme['lugar'])})" if firme["lugar"] else ""
+            primero = (f"«{_celda(firme['titulo'])}»{donde}: "
+                       f"{_minuscula(_sin_punto(firme['accion']))}")
+        if vacio:
+            primero += f"; además, {_minuscula(TEXTO_SIN_CODIGO)}"
+    elif estado == ESTADO_SIN_CODIGO:
+        # R10b (defecto 3): sin código reconocible no se habla como si hubiera una app revisada
+        p2 = ["1. **Revisa que la carpeta sea la correcta** y vuelve a correr la auditoría sobre la carpeta que tiene "
+              "el código de la app."]
+        primero = "revisa que la carpeta sea la correcta (no encontramos código que auditar)"
+    elif estado == ESTADO_AMBAR:
+        lineas = _lineas_ambar(d, "dueno" if variante == "hoja" else variante)
+        intro = _intro_ambar(d)
+        if lineas:
+            p2 = [f"{intro} Lo primero es ampliar la revisión de los puntos que pueden frenar el uso:", *lineas]
+            primero = _minuscula(_sin_punto(re.sub(r"^\d+\. ", "", lineas[0]).replace("**", "")))
+            # R10c: fuera de la lista, «de esos puntos» no tiene a qué referirse: se dice de cuáles
+            primero = re.sub(r"(?: \([^)]*\))?: (así se \w+ \d+) de esos puntos(?:\..*)?$",
+                             lambda m: f" ({m.group(1)} de los {d['graves_sin_revisar']} puntos que pueden frenar el "
+                                       "uso y que quedaron sin revisar)", primero)
+        else:
+            p2 = [f"{intro} Los puntos que pueden frenar el uso que aplican a tu app quedaron revisados; lo siguiente "
+                  "es ampliar el resto de la revisión (ver «Qué pudimos revisar»)."]
+            primero = "ampliar el resto de la revisión (ver «Qué pudimos revisar»)"
+    else:
+        p2 = [f"Vuelve a correr la auditoría {_accion_gris(d)}."]
+        primero = f"vuelve a correr la auditoría {_accion_gris(d)}"
+
+    if variante == "hoja":
+        hito = d["hito_siguiente"] or "ninguno (ya está en el nivel más alto)"
+        texto = (f"**Estado: {d['etiqueta']}.** Lo primero: {primero}.\n"
+                 f"Nivel demostrado: {nd} (dato secundario; ver «Portada» en `informe.md`). Siguiente hito: {hito}.")
+        return validar_portada(texto, estado, variante, d["proyecto"])
+
+    # P1
+    if estado == ESTADO_ARREGLAR:
+        k = sum(1 for b in bl if b["prueba"] != PRUEBA_FIRME)
+        conf = (f" ({plural(k, 'uno', str(k))} hay que {plural(k, 'confirmarlo', 'confirmarlos')} primero)"
+                if k else "")
+        # R10d: el grupo de bloqueos se nombra «problemas que impiden usar la app» / «bloqueos», nunca «graves»
+        # (en P3 «gravedad alta» es otra cosa: la columna de la tabla)
+        frase = (f"Encontramos {plural(nb, 'un problema', f'{nb} problemas')} que hay que arreglar antes "
+                 f"de usar la app con personas reales{conf}. Empieza por el 1.")
+        # R10c: solo con una clave firme (si está por confirmar, lo cubre «Cómo confirmarlo»)
+        if any("secreto_vivo" in (b["tipos"] or []) and b["prueba"] == PRUEBA_FIRME for b in bl):
+            frase += (" Cambiar una clave en su servicio es más urgente que borrarla del archivo: quien ya la copió "
+                      "puede seguir usándola.")
+    elif estado == ESTADO_CONFIRMAR:
+        frase = (f"Encontramos {plural(nb, 'una alarma que, si es real, impide', f'{nb} alarmas que, si son reales, impiden')}"
+                 f" usar la app; {plural(nb, 'podría ser una falsa alarma', 'podrían ser falsas alarmas')}, pero no "
+                 f"podemos {plural(nb, 'descartarla sola. Revísala hoy', 'descartarlas solas. Revísalas hoy')}. "
+                 f"Mientras nadie {plural(nb, 'la', 'las')} confirme, "
+                 f"{plural(nb, 'cuenta como un bloqueo', 'cuentan como bloqueos')}.")
+    elif estado == ESTADO_SIN_CODIGO:
+        frase = (f"{TEXTO_SIN_CODIGO} (o el código está en un lenguaje que el auditor no reconoce). Sin código no hay "
+                 "conclusión posible sobre ninguna app.")
+        if d["faltas_gris"]:
+            frase += f" Además, {_texto_gris(d)}."
+    elif estado == ESTADO_AMBAR:
+        frase = ("No encontramos problemas que impidan usar la app en lo que pudimos revisar. **Esto NO significa que "
+                 "la app sea "
+                 f"segura**: de los {d['graves_aplican']} puntos que pueden frenar el uso, comprobamos "
+                 f"{d['graves_comprobados']} y **{d['graves_sin_revisar']} "
+                 f"{plural(d['graves_sin_revisar'], 'quedó', 'quedaron')} sin revisar**.")
+    else:
+        frase = f"No pudimos revisar ni lo más básico ({_texto_gris(d)}). No hay conclusión posible."
+    if rojo and vacio:
+        frase = f"{TEXTO_SIN_CODIGO}. {frase}"
+    if rojo and d.get("herr_no_corrio"):
+        frase += f" Además, no pudimos usar {' ni '.join(d['herr_no_corrio'])}: los problemas pueden ser más."
+    out = [f"## Portada — {d['proyecto']}", "", f"**Estado: {d['etiqueta']}**", "", frase, "",
+           "### Qué hacer hoy", "", *p2, ""]
+
+    if estado == ESTADO_SIN_CODIGO:
+        out += _resto_sin_codigo(d, variante, nd)
+        modo = NOMBRE_MODO.get(d["modo"], d["modo"])
+        out += ["---", f"Corrida `{d['corrida']}` · modo {modo}{' · sin internet' if d['sin_red'] else ''} · generado "
+                "por plantilla, sin IA. Este resumen no certifica seguridad. **GUÍA**."]
+        return validar_portada("\n".join(out), estado, variante, d["proyecto"])
+
+    # P3 (R10d: un solo título en todos los estados; la tabla incluye los bloqueos de arriba)
+    out += [TITULO_TABLA_PROBLEMAS, ""]
+    if not d["invariante_temas"]:
+        out += ["Sin dato: los archivos de la corrida no cuadran (ver el informe técnico).", ""]
+    else:
+        out += ["| Gravedad | Temas | Avisos |", "|---|---|---|"]
+        for sev, nombre in NOMBRE_SEVERIDAD:
+            temas, avisos = d["filas_temas"][sev]
+            if sev != "critica" and temas == 0:
+                continue
+            if sev == "critica" and rojo and temas:
+                nombre += " (los de arriba)" if not any(t["sev"] == "critica" for t in d["otros_temas"]) \
+                    else " (incluye los de arriba)"
+            out.append(f"| {nombre} | {temas} | {avisos} |")
+        if d["filas_temas"]["critica"][0] == 0:
+            # R10b/R10d: un 0 en «Crítica» no dice que no haya nada crítico en lo que no se revisó
+            out += ["", NOTA_SIN_CRITICOS]
+        out += ["", "Un «aviso» es cada lugar donde apareció un problema; un mismo tema puede repetirse muchas "
+                "veces."]
+        if d["otros_temas"]:
+            out += ["", f"Los más importantes{' después de los de arriba' if rojo else ''}:"]
+            out += _lineas_temas(d["otros_temas"][:3], variante)
+        out.append("")
+
+    # P4
+    out += ["### Qué pudimos revisar", ""]
+    if d["invariantes_ok"]:
+        nl = d["n_avisos_legales"]
+        # R10c: los avisos legales son parte de los que aplican (el denominador), no de los revisados
+        legal = (f" De esos {d['aplicables']}, {nl} {plural(nl, 'es un aviso legal', 'son avisos legales')} que "
+                 "siempre revisa una persona." if nl else "")
+        out.append(f"- Revisamos **{d['revisados']} de {d['aplicables']}** puntos que aplican a tu app "
+                   f"({_pct(d['cobertura'])}).{legal}")
+    else:
+        out.append("- Cobertura: sin dato (los archivos de la corrida no cuadran; ver informe técnico).")
+    conteo = _conteo_motivos(d["motivos_graves"].values())
+    detalle = f" ({_texto_motivos(conteo)})" if conteo else ""
+    out.append(f"- Puntos que pueden frenar el uso: aplican {d['graves_aplican']}; con problema "
+               f"{d['graves_con_problema']}; comprobados sin problema {d['graves_comprobados']}; **sin revisar "
+               f"{d['graves_sin_revisar']}**{detalle}.")
+    if d["ampliar"]:
+        partes = [f"{_llano_ampliar(c, d)} ({n}{' ' + plural(n, 'punto', 'puntos') if k == 0 else ''})"
+                  for k, (c, n) in enumerate(d["ampliar"])]
+        unidas = partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
+        out.append(f"- Lo que más ampliaría la revisión: {unidas}.")
+    out.append("- Que algo no se haya revisado no significa que esté bien.")
+    if d["n_descartes"]:
+        n = d["n_descartes"]
+        out.append(f"- {n} {plural(n, 'alarma la marcó', 'alarmas las marcó')} una persona como "
+                   f"{plural(n, 'falsa', 'falsas')}; no cuentan como revisadas.")
+    out.append("")
+
+    # P5
+    out += ["### El nivel (dato secundario)", ""]
+    nivel = [f"Nivel demostrado: **{nd} de N5**. El nivel solo sube con pruebas a favor: lo que no se pudo revisar "
+             "cuenta como no demostrado. No es una nota de calidad de la app."]
+    ns = d["nivel_siguiente"]
+    if ns:
+        e1, f1, p1, ne1 = ns["evaluados"], len(ns["fallidos"]), len(ns["pendientes"]), len(ns["no_demostrables"])
+        linea = (f"Para {ns['nivel']} hacen falta {ns['aplicables']} {plural(ns['aplicables'], 'punto', 'puntos')}: "
+                 f"{_probados(e1, f1)}")
+        if p1:
+            linea += "; " + _sin_revisar_nivel(p1, ne1)
+        nivel.append(linea + ".")
+        if ne1 and d["modo"] in ("rapido", "estandar"):
+            nivel.append(f"Por eso, en este modo el nivel no pasa de {nd} aunque se arregle todo lo encontrado.")
+    if estado == ESTADO_ARREGLAR:
+        nivel.append(f"En tu caso, además, hay {plural(nb, 'un problema abierto que impide', 'problemas abiertos que impiden')}"
+                     " usar la app.")
+    elif estado == ESTADO_CONFIRMAR:
+        nivel.append(f"En tu caso, además, hay {plural(nb, 'una alarma por confirmar que podría impedir', 'alarmas por confirmar que podrían impedir')}"
+                     " usar la app.")
+    elif estado == ESTADO_AMBAR:
+        f1 = len((ns or {}).get("fallidos") or [])
+        if f1:
+            nivel.append(f"En tu caso no hay bloqueos, pero hay {f1} {plural(f1, 'problema que', 'problemas que')} "
+                         f"también {plural(f1, 'impide', 'impiden')} {ns['nivel']}: "
+                         + "; ".join(_minuscula(_celda(t)) for t in d["titulos_fallidos"]) + ".")
+        else:
+            nivel.append("En tu caso no hay bloqueos: lo que falta es poder revisar esos puntos.")
+    else:
+        nivel.append("En tu caso falta revisar lo más básico.")
+    out.append(" ".join(nivel))
+    out.append("")
+    out += [_linea_listo(d, estado, nd), ""]
+
+    # P6 y P7
+    if d["n_avisos_legales"]:
+        nl = d["n_avisos_legales"]
+        donde = "justo abajo" if variante == "informe" else "en `informe.md`"
+        out += ["### Aviso legal", "",
+                f"{nl} {plural(nl, 'punto legal que debe', 'puntos legales que debe')} revisar una persona (ver "
+                f"«Aviso legal» {donde}). El auditor no certifica cumplimiento legal.", ""]
+    modo = NOMBRE_MODO.get(d["modo"], d["modo"])
+    out += ["---", f"Corrida `{d['corrida']}` · modo {modo}{' · sin internet' if d['sin_red'] else ''} · generado "
+            "por plantilla, sin IA. Este resumen no certifica seguridad. **GUÍA**."]
+    return validar_portada("\n".join(out), estado, variante, d["proyecto"])
+
+
+def portada_reemplazo(d, variante, motivo):
+    """Portada mínima cuando la normal no pasa validar_portada (R10b): fail-closed (el texto que rompió las reglas no
+    se muestra) pero visible (el dueño recibe igual sus tres archivos, con el estado y las cifras de la corrida)."""
+    if variante == "hoja":
+        return (f"**Estado: {d['etiqueta']}.** Lo primero: lee «1. Veredicto» en `informe.md` (el resumen de la "
+                f"portada no se pudo armar).\nNivel demostrado: {d['nivel_demostrado']} (dato secundario).")
+    nb = len(d["bloqueos"])
+    out = [f"## Portada — {d['proyecto']}", "", f"**Estado: {d['etiqueta']}**", "",
+           "No pudimos armar el resumen de esta portada sin romper sus reglas de redacción, así que no lo mostramos. "
+           "Lee el informe técnico (`informe.md`, desde «1. Veredicto»).", ""]
+    if nb:
+        out += [f"Hay {nb} {plural(nb, 'problema que impide usar la app (abierto o por confirmar)', 'problemas que impiden usar la app (abiertos o por confirmar)')}"
+                " (ver «Bloqueos» en `informe.md`).", ""]
+    out += [f"- Puntos que pueden frenar el uso: aplican {d['graves_aplican']}; con problema "
+            f"{d['graves_con_problema']}; comprobados sin problema {d['graves_comprobados']}; **sin revisar "
+            f"{d['graves_sin_revisar']}**.",
+            "- Que algo no se haya revisado no significa que esté bien.", "",
+            f"¿Lista para datos reales de personas? **{ {'SI': 'SÍ'}.get(d['listo'], d['listo'] or 's/d') }**.", ""]
+    if variante == "informe":
+        out += [f"Motivo técnico: {_codigo(utiles.una_linea(str(motivo)))}.", ""]
+    out += ["---", f"Corrida `{d['corrida']}` · generado por plantilla, sin IA. Este resumen no certifica seguridad. "
+            "**GUÍA**."]
+    return "\n".join(out)
+
+
+def _portada_o_reemplazo(d, variante, avisos):
+    try:
+        return render_portada(d, variante)
+    except PortadaInvalida as e:
+        avisos.append(f"{variante}: {e}")
+        return portada_reemplazo(d, variante, e)
+
+
+def _cargar_portada(corrida):
+    corrida = Path(corrida)
+    rm = utiles.leer_json(corrida / "roadmap.json") or _asegurar(corrida)
+    run = utiles.leer_run(corrida)
+    estado = utiles.leer_json(corrida / "estado.json")
+    perfil = utiles.cargar_perfil(corrida)
+    import veredictos as veredictos_mod
+    hallazgos = veredictos_mod.marcar_fp_humanos(corrida, utiles.leer_jsonl(corrida / "hallazgos.jsonl"))
+    return datos_portada(utiles.leer_json(corrida / "gates.json"), estado["controles"], hallazgos,
+                         utiles.leer_json(corrida / "score.json"),
+                         utiles.leer_json(corrida / "normalizacion.json", {}) or {}, rm,
+                         utiles.indice_controles(perfil), estado.get("modo") or "estandar", run.get("id") or "s/d",
+                         Path(run.get("proyecto") or ".").name or "proyecto",
+                         perfil_tecnico=utiles.leer_json(corrida / "perfil_tecnico.json"),
+                         herramientas_json=utiles.leer_json(corrida / "herramientas.json", {}) or {})
+
+
+def portada(corrida, variante="informe", datos=None):
+    """Portada de la corrida (variante informe, dueno u hoja), enmascarada con los secretos de la corrida."""
+    datos = datos if datos is not None else _cargar_portada(corrida)
+    return enmascarar.enmascarar_texto(render_portada(datos, variante), enmascarar.secretos_de_corrida(corrida))
 
 
 def generar(corrida):
@@ -1162,6 +2098,8 @@ def generar(corrida):
     valores = {
         "proyecto": proyecto, "corrida": run.get("id") or "s/d", "commit": run.get("commit7") or ("sin commits" if run.get("es_repo_git") else "sin-git"),
         "modo": estado.get("modo") or "estandar", "version_auditor": VERSION_AUDITOR,
+        # R10c: el valor interno del modo (estandar) va en los comandos; en el texto visible, con tilde (estándar)
+        "modo_visible": NOMBRE_MODO.get(estado.get("modo") or "estandar", estado.get("modo") or "estandar"),
         "nivel_demostrado": nd, "nivel_potencial": gl["nivel_potencial"], "hito": gl["hito"],
         "listo_datos_reales": gl["listo_datos_reales"], "cuello": ", ".join(gl["cuello_de_botella"]) or "—",
         "nota_no_evaluado": nota_no_evaluado(estado["controles"], indice),
@@ -1196,28 +2134,44 @@ def generar(corrida):
                                            motivos=motivos_herramientas(corrida))
     valores["que_falta"] = seccion_que_falta(estado["controles"], indice, herr_json)
     valores["decisiones_ia"] = efecto_fp_graves(veredictos_mod.seccion_informe(corrida), hallazgos)
-    valores["que_hacer"] = seccion_que_hacer(rm, hallazgos, sig)
+    # R10: portada (misma fuente de datos para las tres variantes)
+    datos_p = datos_portada(g, estado["controles"], hallazgos, s, resumen, rm, indice, valores["modo"],
+                            valores["corrida"], proyecto,
+                            perfil_tecnico=utiles.leer_json(corrida / "perfil_tecnico.json"),
+                            herramientas_json=herr_json)
+    avisos_portada = []   # R10b: una portada que no pasa la validación se reemplaza (nunca deja sin informe)
+    valores["portada"] = _portada_o_reemplazo(datos_p, "informe", avisos_portada)
+    listados = ({b["control"] for b in datos_p["bloqueos"][:5]}
+                if datos_p["estado"] in (ESTADO_ARREGLAR, ESTADO_CONFIRMAR) else set())
+    # R10d: el Paso 1 sigue el orden de los bloqueos de la portada (firmes primero en ARREGLAR)
+    primeros = [b["control"] for b in datos_p["bloqueos"]]
+    valores["que_hacer"] = seccion_que_hacer(rm, hallazgos, sig, primeros=primeros)
     redaccion, motivo_red = None, None
     if (corrida / "redaccion-dueno.json").is_file():
         cruda = utiles.leer_json(corrida / "redaccion-dueno.json")
-        ok, motivo_red = validar_redaccion(cruda, rm)
+        ok, motivo_red = validar_redaccion(cruda, rm, (datos_p["revisados"], datos_p["aplicables"]))
         redaccion = cruda if ok else None
     herr_ok = [k + (" (parcial)" if v.get("estado") == "parcial" else "")
                for k, v in sorted((resumen.get("herramientas") or {}).items()) if v.get("estado") in ESTADOS_CORRIO]
     dueno = dict(valores, **secciones_dueno(valores, rm, estado["controles"], indice, veredictos, herr_ok, redaccion,
-                                            motivo_red, sig, hallazgos), bloqueos_dueno=_bloqueos_dueno(g, indice),
+                                            motivo_red, sig, hallazgos, excluir=listados),
+                 bloqueos_dueno=_bloqueos_dueno(g, indice), portada=_portada_o_reemplazo(datos_p, "dueno", avisos_portada),
                  descartes_dueno=descartes_humanos_dueno(veredictos_mod.leer_fp_humanos(corrida)))
     informe = string.Template((PLANTILLAS / "informe.md.tmpl").read_text(encoding="utf-8")).substitute(valores)
     resumen_dueno = string.Template((PLANTILLAS / "resumen-dueno.md.tmpl").read_text(encoding="utf-8")).substitute(dueno)
     ruta = string.Template((PLANTILLAS / "hoja-de-ruta.md.tmpl").read_text(encoding="utf-8")).substitute({
         "proyecto": proyecto, "nivel_demostrado": nd, "hito": gl["hito"], "hito_siguiente": f"{sig}: {gates_mod.HITOS[sig]}",
-        "modo": valores["modo"], "que_hacer_ahora": seccion_que_hacer(rm, hallazgos, sig, maximo=None),
+        "cabecera_portada": _portada_o_reemplazo(datos_p, "hoja", avisos_portada),
+        "modo": valores["modo"], "que_hacer_ahora": seccion_que_hacer(rm, hallazgos, sig, maximo=None, primeros=primeros),
         "grupos": _seccion_grupos(rm) + _aviso_sus(estado["controles"], indice),
         "descartes_humanos": descartes_humanos_ruta(veredictos_mod.leer_fp_humanos(corrida))})
     utiles.escribir_texto(corrida / "informe.md", enmascarar.enmascarar_texto(informe, secretos))
     utiles.escribir_texto(corrida / "resumen-dueno.md", enmascarar.enmascarar_texto(resumen_dueno, secretos))
     utiles.escribir_texto(corrida / "hoja-de-ruta.md", enmascarar.enmascarar_texto(ruta, secretos))
     utiles.escribir_json(corrida / "merged.sarif", enmascarar.enmascarar_obj(sarif(todos, indice), secretos))
+    for a in avisos_portada:
+        print(f"render_informe: AVISO: la portada no pasó su validación ({enmascarar.enmascarar_texto(a, secretos)}); "
+              "se escribió una portada de reemplazo que remite al informe técnico", file=sys.stderr)
     return informe
 
 

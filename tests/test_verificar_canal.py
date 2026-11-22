@@ -89,8 +89,9 @@ class TestPlantilla(unittest.TestCase):
         # se rellena con substitute estricto: no puede quedar ningún marcador sin valor
         claves = {m.group("named") or m.group("braced") for m in string.Template.pattern.finditer(tmpl)
                   if m.group("named") or m.group("braced")}
-        self.assertEqual(claves, {"proyecto", "nivel_demostrado", "hito", "hito_siguiente", "que_hacer_ahora",
-                                  "grupos", "descartes_humanos", "modo"})
+        # R10: la línea de nivel/hito pasó a la cabecera de 2 líneas de la portada (variante hoja)
+        self.assertEqual(claves, {"proyecto", "cabecera_portada", "que_hacer_ahora", "grupos", "descartes_humanos",
+                                  "modo"})
 
 
 class TestFpGraveNoMandaADoctor(fp_critico.TestOtrasSuperficies):

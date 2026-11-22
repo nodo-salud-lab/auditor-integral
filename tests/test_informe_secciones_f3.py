@@ -200,8 +200,16 @@ class TestRedactorEnRender(unittest.TestCase):
             n_run.main([str(corrida)])
             ri.generar(corrida)
             rm = json.loads((corrida / "roadmap.json").read_text(encoding="utf-8"))
-            c0 = rm["items"][0]["control"]
-            red = {"agente": "redactor-dueno", "resumen": "Texto del redactor para el dueño.",
+            # R10: los bloqueos que la portada lista en «Qué hacer hoy» no se repiten en «Qué hacer ahora»
+            bloq = {b["control"] for b in json.loads((corrida / "gates.json").read_text(encoding="utf-8"))
+                    ["global"]["bloqueos"]}
+            c0 = next(i["control"] for i in rm["items"] if i["control"] not in bloq)
+            # R10: el resumen del redactor debe decir «revisados de aplicables» (como la portada) para usarse
+            ctrl = json.loads((corrida / "estado.json").read_text(encoding="utf-8"))["controles"]
+            apl = [e for e in ctrl if e["estado"] != "no_aplica"]
+            rev = sum(1 for e in apl if e["estado"] in ("pass", "fail"))
+            red = {"agente": "redactor-dueno", "resumen": f"Se revisaron {rev} de {len(apl)} puntos. "
+                                                          "Texto del redactor para el dueño.",
                    "por_que_importa": {c0: "Importa porque expone datos."}, "modelo": "m"}
             (corrida / "redaccion-dueno.json").write_text(json.dumps(red), encoding="utf-8")
             ri.generar(corrida)

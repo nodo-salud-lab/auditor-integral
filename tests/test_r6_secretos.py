@@ -57,7 +57,12 @@ def azar(n, alfabeto=string.ascii_letters + string.digits):
 
 
 def generico():
-    return "Zq" + azar(10, string.digits) + azar(28)
+    # Sin prefijo de proveedor, con dígitos y letras (lo detecta generic-api-key por entropía). R10d: letras y dígitos
+    # alternados: un tramo aleatorio de solo letras podía formar una «stopword» de gitleaks (p. ej. «when», «jade»)
+    # y generic-api-key descartaba el hallazgo (≈2 de cada 300 valores: test inestable). Con a lo más dos letras
+    # seguidas no se forma ninguna y el valor sigue siendo aleatorio (3000/3000 detectados con gitleaks 8.30.1).
+    return "Zq" + azar(10, string.digits) + "".join(azar(1, string.ascii_letters) + azar(1, string.digits)
+                                                    for _ in range(14))
 
 
 def jwt(payload):
@@ -344,6 +349,17 @@ def _jsons(crudo, nombre):
 
 
 @unittest.skipUnless(shutil.which("gitleaks") and shutil.which("git"), "gitleaks o git no instalados")
+class TestGeneradorDeterminista(unittest.TestCase):
+    def test_generico_no_forma_palabras(self):
+        """R10d: generic-api-key descarta un valor que contiene una «stopword» (palabra común): el valor sembrado
+        nunca tiene más de dos letras seguidas, así gitleaks lo detecta siempre (antes: KeyError 'nuevo.txt')."""
+        import re as _re
+        for _ in range(500):
+            v = generico()
+            self.assertIsNone(_re.search(r"[A-Za-z]{3}", v))
+            self.assertEqual(len(v), 40)
+
+
 class TestAdaptadorGitleaks(BaseProyecto):
     def correr(self, env=None):
         return subprocess.run(["bash", str(ADAPT / "gitleaks.sh"), str(self.proy), str(self.crudo)],

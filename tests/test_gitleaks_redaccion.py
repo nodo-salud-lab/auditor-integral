@@ -41,8 +41,12 @@ def azar(n, alfabeto=string.ascii_letters + string.digits):
 
 
 def generico():
-    # sin prefijo de proveedor, con dígitos y letras (lo detecta generic-api-key por entropía)
-    return "Zq" + azar(10, string.digits) + azar(20)
+    # Sin prefijo de proveedor, con dígitos y letras (lo detecta generic-api-key por entropía). R10d: letras y dígitos
+    # alternados: un tramo aleatorio de solo letras podía formar una «stopword» de gitleaks (p. ej. «when», «jade»)
+    # y generic-api-key descartaba el hallazgo (≈2 de cada 300 valores: test inestable). Con a lo más dos letras
+    # seguidas no se forma ninguna y el valor sigue siendo aleatorio (3000/3000 detectados con gitleaks 8.30.1).
+    return "Zq" + azar(10, string.digits) + "".join(azar(1, string.ascii_letters) + azar(1, string.digits)
+                                                    for _ in range(10))
 
 
 class Base(unittest.TestCase):
